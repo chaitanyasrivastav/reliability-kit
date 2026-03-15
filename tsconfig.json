@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    /* Project structure */
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    /* Module system */
+    "module": "commonjs",
+    "target": "ES2020",
+    "moduleResolution": "node",
+
+    /* Type generation (important for npm packages) */
+    "declaration": true,
+    "declarationMap": true,
+
+    /* Source maps */
+    "sourceMap": true,
+
+    /* Strictness */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    /* Interop */
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Performance */
+    "skipLibCheck": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}
