@@ -125,7 +125,9 @@ Prevents duplicate execution of request handlers. Built for payment flows, order
 | ------------------- | ------------ |
 | `Framework.EXPRESS` | ✅ Supported |
 | `Framework.FASTIFY` | 🚧 Planned   |
-| `Framework.NODE`    | 🚧 Planned   |
+| `Framework.HONO`    | 🚧 Planned   |
+| `Framework.KOA`     | 🚧 Planned   |
+| `Framework.NEXTJS`  | 🚧 Planned   |
 
 ---
 

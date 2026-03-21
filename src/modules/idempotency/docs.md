@@ -132,7 +132,9 @@ import { Framework } from 'reliability-kit'
 
 Framework.EXPRESS   // ✅ fully implemented
 Framework.FASTIFY   // 🚧 planned
-Framework.NODE      // 🚧 planned
+Framework.HONO      // 🚧 planned
+Framework.KOA       // 🚧 planned
+Framework.NEXTJS    // 🚧 planned
 ```
 
 ---
