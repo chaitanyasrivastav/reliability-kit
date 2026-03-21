@@ -1,6 +1,6 @@
 {
   "name": "reliability-kit",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "API reliability toolkit (idempotency, rate limiting, retries)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,21 +8,67 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
-    "dev": "ts-node src/index.ts"
+    "dev": "ts-node src/index.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:unit": "jest tests/unit --forceExit --detectOpenHandles",
+    "test:integration": "jest tests/integration --forceExit --detectOpenHandles",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "build": "npm run format && npm run lint && npm run typecheck && tsup",
+    "build:ci": "npm run format:check && npm run lint && npm run typecheck && tsup"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/tests/**/*.test.ts"
+    ],
+    "collectCoverageFrom": [
+      "src/**/*.ts",
+      "!src/**/*.d.ts"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 90,
+        "functions": 95,
+        "lines": 95,
+        "statements": 95
+      }
+    },
+    "coveragePathIgnorePatterns": [
+      "src/index.ts",
+      "src/middleware/reliability.ts",
+      "src/types/framework.ts"
+    ]
   },
   "license": "ISC",
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
     "@typescript-eslint/eslint-plugin": "^8.57.0",
     "@typescript-eslint/parser": "^8.57.0",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.4.0",
+    "jest": "^30.3.0",
     "jiti": "^2.6.1",
     "prettier": "^3.8.1",
+    "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
+    "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.0"
   }
