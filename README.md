@@ -104,7 +104,7 @@ Prevents duplicate execution of request handlers. Built for payment flows, order
 - Configurable failure modes (`strict` or `bypass`)
 - `Retry-After` header on in-progress responses
 
-→ [Full documentation](./docs/idempotency.md)
+→ [Full documentation](./src/modules/idempotency/docs.md)
 
 ---
 
