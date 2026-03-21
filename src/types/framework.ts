@@ -8,7 +8,9 @@
  * Each enum value maps to a dedicated adapter internally:
  *   Framework.EXPRESS  → expressAdapter()  (implemented)
  *   Framework.FASTIFY  → fastifyAdapter()  (planned)
- *   Framework.NODE     → nodeAdapter()     (planned)
+ *   Framework.HONO     → honoAdapter()     (planned)
+ *  Framework.KOA      → koaAdapter()      (planned)
+ *  Framework.NEXTJS   → nextjsAdapter()   (planned)
  *
  * The value is a lowercase string rather than a number so that error
  * messages and logs are human-readable — if an unsupported framework
@@ -31,16 +33,30 @@ export enum Framework {
   EXPRESS = 'express',
 
   /**
-   * Fastify.
+   * Fastify 4.x and above.
    * Planned — not yet implemented. Passing this value will throw
    * an 'Unsupported framework' error at setup time.
    */
   FASTIFY = 'fastify',
 
   /**
-   * Raw Node.js http.IncomingMessage / http.ServerResponse.
+   * Hono — works across Node.js, Cloudflare Workers, Bun, and Deno.
    * Planned — not yet implemented. Passing this value will throw
    * an 'Unsupported framework' error at setup time.
    */
-  NODE = 'node',
+  HONO = 'hono',
+
+  /**
+   * Koa 2.x and above.
+   * Planned — not yet implemented. Passing this value will throw
+   * an 'Unsupported framework' error at setup time.
+   */
+  KOA = 'koa',
+
+  /**
+   * Next.js App Router and Pages Router API routes.
+   * Planned — requires a wrapper function pattern rather than middleware.
+   * Passing this value will throw an 'Unsupported framework' error at setup time.
+   */
+  NEXTJS = 'nextjs',
 }
