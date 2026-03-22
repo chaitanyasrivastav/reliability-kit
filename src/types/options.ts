@@ -176,4 +176,48 @@ export interface IdempotencyOptions {
    * Defaults to 'strict'.
    */
   onStoreFailure?: FailureMode
+
+  /**
+   * How strictly to validate that duplicate requests match the original
+   * request that created the idempotency key.
+   *
+   * A fingerprint is computed from the incoming request and stored alongside
+   * the response on first execution. On every subsequent duplicate, the
+   * fingerprint is recomputed and compared to the stored value. A mismatch
+   * means the client reused a key for a different request — rejected with 422.
+   *
+   * 'method' — fingerprints the HTTP method only. Zero CPU cost — a 3-7
+   *            character string comparison. Catches the most common client
+   *            mistake: retrying with the wrong method (e.g. GET instead of
+   *            POST). Does not catch body or path changes.
+   *            Default — appropriate for most APIs.
+   *
+   * 'method+path' — fingerprints the HTTP method, path, and query string.
+   *                 Path is normalized (trailing slash stripped). Query params
+   *                 are preserved as-is — param order is the client's
+   *                 responsibility. SHA-256 hashed for bounded storage size
+   *                 regardless of path length. Catches wrong-endpoint retries
+   *                 and query string changes.
+   *                 Suitable for public APIs with multiple endpoints.
+   *
+   * 'full' — fingerprints method, path, query string, and request body.
+   *          SHA-256 of all four — any difference returns 422. Body is
+   *          serialized via JSON.stringify before hashing, so field insertion
+   *          order matters. Adds ~50μs per request (body serialization
+   *          dominates). Catches silent wrong-amount or wrong-payload retries.
+   *          Suitable for payment flows where body integrity must be guaranteed.
+   *
+   *          ⚠️  Requires the request body to be parsed before the module runs.
+   *          In Express, register reliability() after express.json(). If body
+   *          is undefined when this runs, the fingerprint is computed from {}
+   *          and body changes on retry will not be detected.
+   *          In Fastify the wrapper runs after body parsing automatically.
+   *
+   * Records written before fingerprinting was introduced have no stored
+   * fingerprint — validation is skipped for these records so rolling upgrades
+   * work correctly without 422 errors on existing keys.
+   *
+   * Defaults to 'method'.
+   */
+  fingerprintStrategy?: 'method' | 'method+path' | 'full'
 }

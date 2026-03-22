@@ -52,7 +52,7 @@ export function expressAdapter(options: ReliabilityOptions): RequestHandler {
     // responsible for flushing those back to Express at the end.
     const ctx: RequestContext = {
       method: req.method,
-      path: req.path,
+      path: req.url,
       headers: req.headers,
       body: req.body as unknown,
       statusCode: 200,
