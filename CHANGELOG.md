@@ -1,3 +1,10 @@
+## 0.2.1 — 2026-03-22
+
+### Fixed
+
+- Suppressed false-positive ESLint `no-explicit-any` warning on Redis client
+  interface — `any` is intentional here due to the variadic SET command options
+
 ## 0.2.0 — 2026-03-22
 
 ### Added

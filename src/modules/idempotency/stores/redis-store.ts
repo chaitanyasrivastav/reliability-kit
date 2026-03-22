@@ -36,6 +36,7 @@ type StoredRecord =
 export interface RedisClient {
   get(key: string): Promise<string | null>
   set(key: string, value: string): Promise<string | null>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   set(key: string, value: string, ...args: any[]): Promise<string | null>
   del(key: string): Promise<number>
 }
