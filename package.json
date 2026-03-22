@@ -1,6 +1,6 @@
 {
   "name": "reliability-kit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "API reliability toolkit (idempotency, rate limiting, retries)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
