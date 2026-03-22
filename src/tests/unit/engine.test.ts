@@ -44,7 +44,9 @@ describe('ReliabilityEngine — basic execution', () => {
       await next()
     })
     const engine = new ReliabilityEngine([moduleA, moduleB])
-    const handler = jest.fn(async () => { callOrder.push('handler') })
+    const handler = jest.fn(async () => {
+      callOrder.push('handler')
+    })
 
     await engine.handle(makeCtx(), handler)
 
@@ -59,7 +61,9 @@ describe('ReliabilityEngine — basic execution', () => {
     })
     const engine = new ReliabilityEngine([module])
     const ctx = makeCtx()
-    const handler = jest.fn(async () => { received.push(ctx) })
+    const handler = jest.fn(async () => {
+      received.push(ctx)
+    })
 
     await engine.handle(ctx, handler)
 
@@ -124,11 +128,13 @@ describe('ReliabilityEngine — short-circuit', () => {
     })
 
     const engine = new ReliabilityEngine([moduleA, moduleB])
-    const handler = jest.fn(async () => { callOrder.push('handler') })
+    const handler = jest.fn(async () => {
+      callOrder.push('handler')
+    })
 
     await engine.handle(makeCtx(), handler)
 
-      expect(callOrder).toEqual(['A:before', 'B:set-response', 'A:after'])
+    expect(callOrder).toEqual(['A:before', 'B:set-response', 'A:after'])
     expect(handler).not.toHaveBeenCalled()
   })
 
@@ -186,7 +192,9 @@ describe('ReliabilityEngine — post-handler logic', () => {
     })
 
     const engine = new ReliabilityEngine([moduleA, moduleB])
-    const handler = jest.fn(async () => { callOrder.push('handler') })
+    const handler = jest.fn(async () => {
+      callOrder.push('handler')
+    })
 
     await engine.handle(makeCtx(), handler)
 
@@ -202,7 +210,9 @@ describe('ReliabilityEngine — error handling', () => {
       await next() // handler throws — error propagates here
     })
     const engine = new ReliabilityEngine([module])
-    const handler = jest.fn(async () => { throw new Error('handler failed') })
+    const handler = jest.fn(async () => {
+      throw new Error('handler failed')
+    })
 
     await expect(engine.handle(makeCtx(), handler)).rejects.toThrow('handler failed')
   })
@@ -228,8 +238,9 @@ describe('ReliabilityEngine — error handling', () => {
     })
     const engine = new ReliabilityEngine([module])
 
-    await expect(engine.handle(makeCtx(), noopHandler))
-      .rejects.toThrow('next() called multiple times')
+    await expect(engine.handle(makeCtx(), noopHandler)).rejects.toThrow(
+      'next() called multiple times',
+    )
   })
 
   it('throws on double next() even with multiple modules in the chain', async () => {
@@ -242,8 +253,9 @@ describe('ReliabilityEngine — error handling', () => {
     })
     const engine = new ReliabilityEngine([badModule, goodModule])
 
-    await expect(engine.handle(makeCtx(), noopHandler))
-      .rejects.toThrow('next() called multiple times')
+    await expect(engine.handle(makeCtx(), noopHandler)).rejects.toThrow(
+      'next() called multiple times',
+    )
   })
 })
 
@@ -258,7 +270,9 @@ describe('ReliabilityEngine — edge cases', () => {
   })
 
   it('does not mutate ctx unexpectedly', async () => {
-    const module = makeModule(async (ctx, next) => { await next() })
+    const module = makeModule(async (ctx, next) => {
+      await next()
+    })
     const engine = new ReliabilityEngine([module])
     const ctx = makeCtx({ method: 'POST', path: '/orders', body: { amount: 100 } })
     await engine.handle(ctx, noopHandler)
@@ -268,7 +282,9 @@ describe('ReliabilityEngine — edge cases', () => {
   })
 
   it('single module that calls next() reaches the handler', async () => {
-    const module = makeModule(async (ctx, next) => { await next() })
+    const module = makeModule(async (ctx, next) => {
+      await next()
+    })
     const engine = new ReliabilityEngine([module])
     const handler = jest.fn(async () => {})
     await engine.handle(makeCtx(), handler)

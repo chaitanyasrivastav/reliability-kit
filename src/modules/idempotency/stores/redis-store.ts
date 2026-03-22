@@ -1,30 +1,4 @@
 import { IdempotencyStore, IdempotencyRecord } from './store'
-
-/**
- * Valid argument combinations for Redis SET command flags.
- *
- * Redis SET accepts flags in specific combinations — not all orderings
- * are valid. This union type encodes exactly what the store uses,
- * keeping the RedisClient interface honest without resorting to any[].
- *
- * Supported combinations:
- *   EX seconds          — expire after N seconds
- *   PX milliseconds     — expire after N milliseconds
- *   NX                  — set only if key does not exist (used by acquire())
- *   NX EX seconds       — atomic "set if not exists + expiry" (primary acquire pattern)
- *   NX PX milliseconds  — same but millisecond expiry
- *   EX seconds NX       — alternative ordering, same semantics
- *   EX seconds XX       — set only if key already exists + expiry
- */
-type RedisSetArgs =
-  | ['EX', number]
-  | ['PX', number]
-  | ['NX']
-  | ['NX', 'EX', number]
-  | ['NX', 'PX', number]
-  | ['EX', number, 'NX']
-  | ['EX', number, 'XX']
-
 /**
  * The shape of a record as stored in Redis.
  *
@@ -62,7 +36,7 @@ type StoredRecord =
 export interface RedisClient {
   get(key: string): Promise<string | null>
   set(key: string, value: string): Promise<string | null>
-  set(key: string, value: string, ...args: RedisSetArgs): Promise<string | null>
+  set(key: string, value: string, ...args: any[]): Promise<string | null>
   del(key: string): Promise<number>
 }
 

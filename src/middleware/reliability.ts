@@ -2,6 +2,7 @@ import { Framework } from '../types/framework'
 import { ReliabilityOptions } from '../types/options'
 import { expressAdapter } from '../frameworks/express'
 import { validateOptions } from '../modules/idempotency/validation'
+import { fastifyAdapter } from '../frameworks/fastify'
 
 /**
  * Primary entry point for the reliability-kit library.
@@ -53,6 +54,11 @@ export function reliability(options: ReliabilityOptions) {
       // Delegate to the Express adapter which bridges ReliabilityOptions
       // to Express's req/res/next model and wires up the ReliabilityEngine.
       return expressAdapter(options)
+
+    case Framework.FASTIFY:
+      // Returns a wrapper function — use it to decorate individual route handlers.
+      // No plugin registration needed — just wrap the handler directly.
+      return fastifyAdapter(options)
 
     default:
       // Framework enum value was provided but has no adapter implementation.
