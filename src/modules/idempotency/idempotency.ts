@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { ReliabilityModule } from '../../core/module'
 import { RequestContext } from '../../core/context'
 import { IdempotencyStore, IdempotencyRecord } from './stores/store'
@@ -36,6 +37,31 @@ export type FailureMode = 'strict' | 'bypass'
  *            and a transparent replay would cause incorrect behaviour.
  */
 export type DuplicateStrategy = 'cache' | 'reject'
+
+/**
+ * Controls how strictly duplicate requests are validated against the
+ * original request that created the idempotency key.
+ *
+ * When a duplicate arrives and a completed record exists, the module
+ * compares the incoming request against the stored fingerprint. If they
+ * differ, the request is rejected with 422.
+ *
+ * 'method'      — validates HTTP method only. A key used with POST cannot
+ *                 be reused with GET. Zero CPU cost — just a string comparison.
+ *                 Default — catches the most common client mistake at no overhead.
+ *                 Suitable for: internal services, trusted clients, low-risk ops.
+ *
+ * 'method+path' — validates method and path including query string (params
+ *                 sorted for consistency). Different query params = different
+ *                 fingerprint. SHA-256 hash for bounded storage size.
+ *                 Suitable for: public APIs, multiple endpoints, untrusted clients.
+ *
+ * 'full'        — validates method, path, query string, and request body.
+ *                 SHA-256 of all — any difference returns 422.
+ *                 Adds JSON.stringify + hashing cost per request.
+ *                 Suitable for: payment flows where body integrity must be guaranteed.
+ */
+export type FingerprintStrategy = 'method' | 'method+path' | 'full'
 
 /**
  * Configuration for the IdempotencyModule.
@@ -112,6 +138,26 @@ export interface IdempotencyConfig {
    * Defaults to 30 seconds.
    */
   processingTtl?: number
+
+  /**
+   * How strictly to validate that duplicate requests match the original.
+   *
+   * A fingerprint is stored alongside the response on first execution.
+   * On every subsequent duplicate, the incoming request is fingerprinted
+   * and compared to the stored value. A mismatch means the client reused
+   * a key for a different request — rejected with 422.
+   *
+   * Defaults to 'method' — catches wrong-method retries at zero CPU cost.
+   * See FingerprintStrategy for full explanation of each option.
+   *
+   * ⚠️  For payment flows, use 'full' — ensures the request body has not
+   * changed between retries, preventing silent wrong-amount charges.
+   *
+   * Note: 'full' requires the request body to be parsed before the module
+   * runs. In Express, ensure reliability() is registered after express.json().
+   * In Fastify the wrapper runs after body parsing so this is automatic.
+   */
+  fingerprintStrategy?: FingerprintStrategy
 }
 
 /**
@@ -136,7 +182,10 @@ export interface IdempotencyConfig {
  * │      │                                                               │
  * │   false ──► get()                                                    │
  * │               │                                                      │
- * │            completed ──► cached response (or 409 reject)            │
+ * │            completed ──► validateFingerprint()                       │
+ * │                               │                                      │
+ * │                           mismatch ──► 422                           │
+ * │                           match    ──► cached response (or 409)      │
  * │            processing ──► 409 in-progress + Retry-After             │
  * └──────────────────────────────────────────────────────────────────────┘
  *
@@ -147,10 +196,10 @@ export interface IdempotencyConfig {
  * │                                                                      │
  * │  get() ──► null ──► next() ──► set()  ← no concurrency guarantee    │
  * │      │                                                               │
- * │   completed ──► cached response (or 409 reject)                     │
+ * │   completed ──► validateFingerprint() ──► cached response (or 409)  │
  * └──────────────────────────────────────────────────────────────────────┘
  *
- * @example Redis (locked path):
+ * @example Redis (locked path, method fingerprint — default):
  * ```typescript
  * app.use(reliability({
  *   framework: Framework.EXPRESS,
@@ -161,23 +210,21 @@ export interface IdempotencyConfig {
  *     processingTtl: 30,
  *     duplicateStrategy: 'cache',
  *     onStoreFailure: 'strict',
+ *     fingerprintStrategy: 'method',  // default — zero cost
  *   }
  * }))
  * ```
  *
- * @example SQL custom store (locked path via acquire()):
+ * @example Payment flow (full fingerprint — body integrity):
  * ```typescript
- * class PostgresStore implements IdempotencyStore {
- *   async acquire(key, ttl) {
- *     const result = await db.query(
- *       `INSERT INTO idempotency_keys (key, status, expires_at)
- *        VALUES ($1, 'processing', now() + ($2 || ' seconds')::interval)
- *        ON CONFLICT (key) DO NOTHING`,
- *       [key, ttl]
- *     )
- *     return result.rowCount > 0  // true = won, false = key exists
+ * app.use(reliability({
+ *   framework: Framework.EXPRESS,
+ *   idempotency: {
+ *     enabled: true,
+ *     store: new RedisStore(redisClient),
+ *     fingerprintStrategy: 'full',  // validates method + path + body
  *   }
- * }
+ * }))
  * ```
  */
 export class IdempotencyModule implements ReliabilityModule {
@@ -186,6 +233,7 @@ export class IdempotencyModule implements ReliabilityModule {
   private readonly processingTtl: number
   private readonly onStoreFailure: FailureMode
   private readonly duplicateStrategy: DuplicateStrategy
+  private readonly fingerprintStrategy: FingerprintStrategy
   private readonly store: IdempotencyStore
 
   constructor(config: IdempotencyConfig) {
@@ -197,6 +245,7 @@ export class IdempotencyModule implements ReliabilityModule {
     this.processingTtl = config.processingTtl ?? 30
     this.onStoreFailure = config.onStoreFailure ?? 'strict'
     this.duplicateStrategy = config.duplicateStrategy ?? 'cache'
+    this.fingerprintStrategy = config.fingerprintStrategy ?? 'method'
     this.store = config.store
 
     // Without acquire(), concurrent duplicate requests can both pass the
@@ -204,16 +253,6 @@ export class IdempotencyModule implements ReliabilityModule {
     // the purpose of idempotency. In strict mode this is a hard
     // misconfiguration that must surface immediately on startup, not
     // silently during a live payment request.
-    //
-    // acquire() is the universal concurrency primitive — implement it with
-    // whatever conditional write your backend supports:
-    //   Redis:    SET NX EX → return result === 'OK'
-    //   SQL:      INSERT ON CONFLICT DO NOTHING → return rowCount > 0
-    //   DynamoDB: ConditionExpression attribute_not_exists
-    //   MongoDB:  findOneAndUpdate with $setOnInsert
-    //
-    // Bypass mode accepts a store without acquire() — suitable for
-    // operations where occasional duplicate execution is acceptable.
     if (!this.store.acquire && this.onStoreFailure === 'strict') {
       throw new Error(
         'Store must implement acquire() for concurrency safety. ' +
@@ -226,34 +265,23 @@ export class IdempotencyModule implements ReliabilityModule {
 
   async execute(ctx: RequestContext, next: () => Promise<void>): Promise<void> {
     // Case-insensitive header lookup — HTTP headers are case-insensitive
-    // by spec but frameworks differ in how they normalise them. Scanning
-    // all entries with a lowercase comparison handles all cases correctly.
+    // by spec but frameworks differ in how they normalise them.
     const rawKey = ctx.headers
       ? Object.entries(ctx.headers).find(([k]) => k.toLowerCase() === this.keyHeader)?.[1]
       : undefined
 
-    // Multi-value headers arrive as string[] in some frameworks (e.g. when
-    // a header is sent twice). Take the first value — the idempotency key
-    // is always a single value; duplicates are a client error.
+    // Multi-value headers arrive as string[] in some frameworks.
+    // Take the first value — the idempotency key is always a single value.
     const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey
 
-    // No idempotency key present — pass through as a normal non-idempotent
-    // request. This allows the module to sit on all routes without forcing
-    // every caller to send the header. Routes that don't need idempotency
-    // simply omit the header.
+    // No idempotency key — pass through as a normal non-idempotent request.
     if (!idempotencyKey) return next()
 
-    // Route to the correct execution path based on store capability.
-    // acquire() is the universal signal — any store that implements it,
-    // regardless of backend (Redis, SQL, DynamoDB, MongoDB), uses the
-    // locked path with full concurrency guarantees.
     if (typeof this.store.acquire === 'function') {
       return this.executeLocked(ctx, next, idempotencyKey)
     }
 
-    // No acquire() — best-effort simple path.
-    // Constructor already threw in strict mode so this only runs in
-    // bypass mode. Warn per request so ops can observe the gap.
+    // No acquire() — best-effort simple path. Bypass mode only.
     console.warn(
       'Store does not implement acquire() — idempotency is best-effort only. ' +
         'Concurrent duplicate requests may both execute the handler.',
@@ -261,64 +289,116 @@ export class IdempotencyModule implements ReliabilityModule {
     return this.executeSimple(ctx, next, idempotencyKey)
   }
 
+  // ── Fingerprinting ────────────────────────────────────────────────────
+  //
+  // Fingerprints identify the shape of a request — method, path, and
+  // optionally body. Stored on first execution. Validated on every
+  // subsequent duplicate to catch key reuse across different operations.
+  //
+  // Performance characteristics:
+  //   method      → 3-7 char string, zero cost
+  //   method+path → SHA-256 of method + normalized path (~1μs)
+  //   full        → SHA-256 of method + path + body (~50μs, body dominates)
+
+  /**
+   * Normalizes a path for consistent fingerprinting.
+   *
+   * - Strips trailing slash: /payments/123/ → /payments/123
+   * - Sorts query parameters: ?b=2&a=1 → ?a=1&b=2
+   *
+   * Sorting query params ensures /payments?a=1&b=2 and /payments?b=2&a=1
+   * produce the same fingerprint — they are the same request.
+   */
+  private normalizePath(path: string): string {
+    const queryIndex = path.indexOf('?')
+    const cleanPath = (queryIndex === -1 ? path : path.slice(0, queryIndex)).replace(/\/$/, '')
+
+    if (queryIndex === -1) return cleanPath
+
+    const queryString = path.slice(queryIndex + 1)
+    const params = new URLSearchParams(queryString)
+    const sorted = new URLSearchParams(
+      [...params.entries()].sort(([a], [b]) => a.localeCompare(b)),
+    ).toString()
+
+    return `${cleanPath}?${sorted}`
+  }
+
+  /**
+   * Builds a fingerprint for the current request.
+   *
+   * 'method'      → raw method string — never hashed, always short and safe.
+   * 'method+path' → SHA-256 of method + normalized path. Hashed to keep
+   *                 storage size bounded regardless of path length.
+   * 'full'        → SHA-256 of method + path + JSON-serialized body.
+   *                 Register reliability() after body parsing middleware
+   *                 to ensure ctx.body is populated before this runs.
+   */
+  private buildFingerprint(ctx: RequestContext): string {
+    const method = ctx.method.toUpperCase()
+
+    switch (this.fingerprintStrategy) {
+      case 'method':
+        return method
+
+      case 'method+path': {
+        const path = this.normalizePath(ctx.path)
+        return createHash('sha256').update(`${method}:${path}`).digest('hex')
+      }
+
+      case 'full': {
+        const path = this.normalizePath(ctx.path)
+        const body = JSON.stringify(ctx.body ?? {})
+        return createHash('sha256').update(`${method}:${path}:${body}`).digest('hex')
+      }
+    }
+  }
+
+  /**
+   * Validates the incoming request fingerprint against the stored record.
+   *
+   * Returns true  → fingerprints match, or no fingerprint stored (old record).
+   * Returns false → mismatch — client reused the key for a different request.
+   *
+   * Gracefully passes records without a stored fingerprint — ensures rolling
+   * upgrades work correctly where v0.1.x records (no fingerprint) coexist
+   * with v0.2.x records in the same store.
+   */
+  private validateFingerprint(ctx: RequestContext, record: IdempotencyRecord): boolean {
+    // No fingerprint stored — old record predating fingerprint support.
+    // Skip validation so v0.1.x records still serve cached responses after upgrade.
+    if (!record.fingerprint) return true
+
+    return this.buildFingerprint(ctx) === record.fingerprint
+  }
+
   // ── Locked path ───────────────────────────────────────────────────────
-  //
-  // Used by any store that implements acquire() — Redis, Memory, SQL,
-  // DynamoDB, MongoDB. The store owns the implementation of acquire(),
-  // the module owns the lifecycle orchestration around it.
-  //
-  // The same three-phase flow works for all backends:
-  //   acquire() → execute → set(completed)
-  //
-  // The only difference between Redis and SQL is what happens inside
-  // acquire() — the module never needs to know.
   private async executeLocked(
     ctx: RequestContext,
     next: () => Promise<void>,
     key: string,
   ): Promise<void> {
     // ── Step 1: Acquire the processing lock ──────────────────────────
-    //
-    // Atomically write a processing record. Only one concurrent request
-    // wins — all others receive false and are handled in step 2.
-    // The processingTtl sets how long the lock lives before auto-expiring
-    // as a crash safety net.
     let acquired = false
     try {
       acquired = await this.store.acquire!(key, this.processingTtl)
     } catch (err) {
-      // Store threw during acquire — respect the configured failure mode.
-      // Strict: abort the request, surface the error to the caller.
-      // Bypass: proceed without idempotency rather than failing entirely.
       if (this.onStoreFailure === 'strict') throw err
       return next()
     }
 
     // ── Step 2: Lock not acquired → duplicate in flight ───────────────
-    //
-    // Another request already holds the lock. Fetch the record to
-    // determine whether to serve a cached response or return 409.
     if (!acquired) {
       return this.handleDuplicate(ctx, key)
     }
 
     // ── Step 3: Lock acquired → execute the handler ───────────────────
-    //
-    // We won the race. Execute the handler. If it throws, release the
-    // lock immediately so retries can re-acquire without waiting up to
-    // processingTtl seconds for the safety-net expiry to fire.
     try {
       await next()
     } catch (err) {
-      // Handler failed — work did NOT happen, safe to release the lock.
-      // Use release() not delete() — release() guards against wiping a
-      // completed record if called out of order. delete() is unconditional.
       try {
         await this.store.release?.(key)
       } catch (releaseErr) {
-        // release() failed — lock expires naturally after processingTtl.
-        // Log so ops can observe the extended retry delay, but do not
-        // mask the original handler error — that is what the caller needs.
         console.error(`Failed to release lock for key ${key}:`, releaseErr)
       }
       throw err
@@ -329,23 +409,11 @@ export class IdempotencyModule implements ReliabilityModule {
   }
 
   // ── Simple path ───────────────────────────────────────────────────────
-  //
-  // Used when the store does not implement acquire().
-  // Best-effort only — bypass mode required, strict mode throws at
-  // construction time so this path is never reached in strict mode.
-  //
-  // Race condition is possible: two concurrent requests can both call
-  // get() → null and both execute the handler. Acceptable for operations
-  // that are safe to execute more than once (analytics, reads, low-risk
-  // writes) or for low-traffic applications where the race is statistically
-  // unlikely.
   private async executeSimple(
     ctx: RequestContext,
     next: () => Promise<void>,
     key: string,
   ): Promise<void> {
-    // Check if a completed response already exists before executing.
-    // If get() fails, proceed without idempotency — bypass mode accepts this.
     let record = null
     try {
       record = await this.store.get(key)
@@ -357,29 +425,16 @@ export class IdempotencyModule implements ReliabilityModule {
       return this.serveCachedResponse(ctx, record)
     }
 
-    // No lock — execute handler.
-    // Race condition possible: concurrent requests may both reach here
-    // simultaneously. Accepted in bypass mode — use a store with acquire()
-    // for strict duplicate prevention.
     await next()
-
-    // Persist result — if this fails, the next retry re-executes the handler.
-    // This is the known limitation of the simple path. No release() needed
-    // because no processing lock was ever acquired.
     await this.persistCompleted(ctx, key)
   }
 
   // ── Shared: handle duplicate in flight ────────────────────────────────
-  //
-  // Called by executeLocked when acquire() returns false.
-  // Fetches the record to decide: serve cached response or 409 in-progress.
   private async handleDuplicate(ctx: RequestContext, key: string): Promise<void> {
     let record = null
     try {
       record = await this.store.get(key)
     } catch (err) {
-      // get() failed — strict mode rethrows, bypass falls through to the
-      // 409 in-progress path. Retrying is safe — handler never executed.
       if (this.onStoreFailure === 'strict') throw err
     }
 
@@ -387,8 +442,7 @@ export class IdempotencyModule implements ReliabilityModule {
       return this.serveCachedResponse(ctx, record)
     }
 
-    // Original request is still processing — tell the caller the earliest
-    // safe time to retry. The module never polls or retries internally.
+    // Still processing — return 409 with Retry-After
     ctx.statusCode = 409
     ctx.headers = { ...ctx.headers, 'Retry-After': String(this.processingTtl) }
     ctx.response = { error: 'Request already in progress', retryAfter: this.processingTtl }
@@ -396,9 +450,30 @@ export class IdempotencyModule implements ReliabilityModule {
 
   // ── Shared: serve a cached completed response ─────────────────────────
   //
-  // duplicateStrategy controls whether the caller sees the original
-  // response transparently (cache) or an explicit 409 (reject).
+  // Validates the fingerprint before serving the cached response.
+  // A mismatch means the client reused an idempotency key for a different
+  // request — rejected with 422 (Unprocessable Entity).
+  //
+  // 422 is the correct status here — 409 means "duplicate request", 422
+  // means "your request is semantically invalid". Using 409 would mislead
+  // clients into thinking the key is still valid for retry.
   private serveCachedResponse(ctx: RequestContext, record: IdempotencyRecord): void {
+    // ── Fingerprint validation ─────────────────────────────────────────
+    //
+    // Catches key reuse across different operations:
+    //   GET /payments  key:"1" → cached
+    //   POST /payments key:"1" → 422 (method mismatch with 'method' strategy)
+    //
+    //   POST /payments { amount: 100 } key:"1" → cached
+    //   POST /payments { amount: 999 } key:"1" → 422 (body mismatch with 'full' strategy)
+    if (!this.validateFingerprint(ctx, record)) {
+      ctx.statusCode = 422
+      ctx.response = {
+        error: 'This idempotency key was used with a different request. Use a new key.',
+      }
+      return
+    }
+
     if (this.duplicateStrategy === 'reject') {
       ctx.statusCode = 409
       ctx.response = { error: 'Duplicate request' }
@@ -411,19 +486,12 @@ export class IdempotencyModule implements ReliabilityModule {
 
   // ── Shared: persist the completed response ────────────────────────────
   //
-  // Called after next() succeeds on both paths.
+  // Stores the fingerprint alongside the response so future duplicates
+  // can be validated against the original request.
   //
   // ⚠️  CRITICAL: never call release() or delete() if this fails.
-  //
-  // The handler already ran — its side effects already happened (payment
-  // charged, email sent, order created). Releasing the lock here would
-  // allow the next retry to re-acquire and re-execute the handler,
-  // producing a duplicate side effect. This is exactly what idempotency
-  // exists to prevent.
-  //
-  // On failure: log loudly, let processingTtl expire naturally, and accept
-  // that a retry within that window may re-execute. Keep processingTtl
-  // short to minimise this window.
+  // The handler already ran — releasing the lock would allow a retry to
+  // re-execute and produce a duplicate side effect.
   private async persistCompleted(ctx: RequestContext, key: string): Promise<void> {
     try {
       await this.store.set(
@@ -432,6 +500,7 @@ export class IdempotencyModule implements ReliabilityModule {
           status: 'completed',
           response: ctx.response,
           statusCode: ctx.statusCode ?? 200,
+          fingerprint: this.buildFingerprint(ctx),
         },
         this.ttl,
       )

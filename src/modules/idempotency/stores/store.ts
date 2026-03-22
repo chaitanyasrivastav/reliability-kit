@@ -41,6 +41,9 @@ export interface IdempotencyRecord {
    * this field was introduced.
    */
   status?: 'processing' | 'completed'
+
+  // Optional fingerprint for debugging and testing — not used by the module.
+  fingerprint?: string
 }
 
 /**

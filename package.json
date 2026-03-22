@@ -62,6 +62,7 @@
     "@typescript-eslint/parser": "^8.57.0",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
+    "fastify": "^5.8.2",
     "globals": "^17.4.0",
     "jest": "^30.3.0",
     "jiti": "^2.6.1",

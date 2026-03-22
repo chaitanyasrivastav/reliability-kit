@@ -1,7 +1,6 @@
 import { ReliabilityEngine } from '../core/engine'
 import { RequestContext } from '../core/context'
 import { IdempotencyModule } from '../modules/idempotency/idempotency'
-import { LoggingModule } from '../modules/logging'
 import { ReliabilityOptions } from '../types/options'
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
 
@@ -33,7 +32,7 @@ export function expressAdapter(options: ReliabilityOptions): RequestHandler {
   // Module instances are stateless with respect to individual requests
   // (all state lives in the store or ctx), so sharing them across requests
   // is safe and avoids unnecessary allocations on every request.
-  const modules = [new LoggingModule()]
+  const modules = []
 
   // Idempotency is opt-in — only constructed when explicitly enabled.
   // Keeping it opt-in means the adapter adds zero overhead for apps
@@ -56,6 +55,7 @@ export function expressAdapter(options: ReliabilityOptions): RequestHandler {
       path: req.path,
       headers: req.headers,
       body: req.body as unknown,
+      statusCode: 200,
     }
 
     // ── Response interception ──────────────────────────────────────────
@@ -136,7 +136,7 @@ export function expressAdapter(options: ReliabilityOptions): RequestHandler {
     // Using res.json() rather than res.send() ensures the correct
     // Content-Type header is set for object responses (application/json).
     if (ctx.response !== undefined && !res.headersSent) {
-      res.status(ctx.statusCode ?? 200).json(ctx.response)
+      res.status(ctx.statusCode as number).json(ctx.response)
     }
   }
 }

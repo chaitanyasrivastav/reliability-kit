@@ -22,6 +22,7 @@ Thank you for your interest in contributing. This document explains how to get s
 ## Getting Started
 
 **Prerequisites:**
+
 - Node.js 18 or above
 - npm 9 or above
 - Git
@@ -143,11 +144,13 @@ npm run build:ci
 1. **Open an issue first** for anything non-trivial. Discuss the approach before writing code — this avoids wasted effort if the direction isn't right.
 
 2. **Branch from the latest `main`:**
+
    ```bash
    git checkout main
    git pull origin main
    git checkout -b feat/fastify-adapter
    ```
+
    > Direct pushes to `main` are blocked — all changes must go through a PR.
 
 3. **Write tests first.** We maintain 90%+ branch coverage and 95%+ line coverage. PRs that drop coverage below the thresholds will not be merged. Run `npm run test:coverage` to check before opening the PR.
@@ -155,6 +158,7 @@ npm run build:ci
 4. **Follow the code standards** — see below.
 
 5. **Run the full CI check locally before pushing:**
+
    ```bash
    npm run build:ci && npm test
    ```
@@ -182,17 +186,18 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 
 **Types:**
 
-| Type | Use for |
-|---|---|
-| `feat` | New feature or capability |
-| `fix` | Bug fix |
-| `docs` | Documentation only |
-| `test` | Adding or updating tests |
+| Type       | Use for                                 |
+| ---------- | --------------------------------------- |
+| `feat`     | New feature or capability               |
+| `fix`      | Bug fix                                 |
+| `docs`     | Documentation only                      |
+| `test`     | Adding or updating tests                |
 | `refactor` | Code change that isn't a fix or feature |
-| `chore` | Build process, dependencies, tooling |
-| `perf` | Performance improvement |
+| `chore`    | Build process, dependencies, tooling    |
+| `perf`     | Performance improvement                 |
 
 **Examples:**
+
 ```
 feat: add Fastify adapter
 fix: release() not called when acquire() times out
@@ -206,11 +211,13 @@ chore: upgrade tsup to v9
 ## Code Standards
 
 **TypeScript:**
+
 - No `any` in source files — use `unknown` for values with unknown shape
 - All public interfaces and methods must have JSDoc comments
 - Exported types must be documented with usage examples where non-obvious
 
 **Tests:**
+
 - Every new feature needs unit tests
 - Every bug fix needs a regression test that fails before the fix and passes after
 - Use `makeStore()`, `makeCtx()`, and `makeModule()` helpers for consistency
@@ -218,11 +225,13 @@ chore: upgrade tsup to v9
 - Concurrency-sensitive code needs stress tests — see `concurrency.test.ts` for the pattern
 
 **Comments:**
+
 - Comments explain **why**, not **what** — the code already says what
 - Document tradeoffs explicitly, especially around concurrency and atomicity
 - Mark critical invariants with `// ⚠️ CRITICAL:` so they don't get accidentally removed
 
 **Store implementations:**
+
 - Must implement the `IdempotencyStore` interface
 - Must include JSDoc on every method explaining the atomicity guarantee
 - Must handle corrupted data gracefully — never throw on bad stored values

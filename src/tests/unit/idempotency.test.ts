@@ -1,6 +1,7 @@
 import { IdempotencyModule } from '../../modules/idempotency/idempotency'
 import { IdempotencyStore, IdempotencyRecord } from '../../modules/idempotency/stores/store'
 import { RequestContext } from '../../core/context'
+import { createHash } from 'crypto'
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -207,7 +208,7 @@ describe('locked path — acquire() returns true (happy path)', () => {
     )
     expect(store.set).toHaveBeenCalledWith(
       'test-key-123',
-      { status: 'completed', response: { id: 'order_1' }, statusCode: 201 },
+      { status: 'completed', response: { id: 'order_1' }, statusCode: 201, fingerprint: 'POST' },
       expect.any(Number),
     )
   })
@@ -777,7 +778,7 @@ describe('simple path — store without acquire() (bypass mode only)', () => {
     )
     expect(store.set).toHaveBeenCalledWith(
       'test-key-123',
-      { status: 'completed', response: { id: 'order_1' }, statusCode: 201 },
+      { status: 'completed', response: { id: 'order_1' }, statusCode: 201, fingerprint: 'POST' },
       expect.any(Number),
     )
   })
@@ -930,5 +931,464 @@ describe('ctx properties not mutated unexpectedly', () => {
       }),
     )
     expect(ctx.path).toBe('/payments')
+  })
+})
+
+describe('ctx.headers is absent', () => {
+  it('passes through to next() when ctx.headers is null', async () => {
+    const { module, store } = makeModule()
+    const ctx = makeCtx({ headers: null as any })
+    const next = makeNext()
+
+    await module.execute(ctx, next)
+
+    expect(next).toHaveBeenCalledTimes(1)
+    expect(store.acquire).not.toHaveBeenCalled()
+  })
+})
+
+// ─── method+path fingerprint strategy — path and query string handling ───────
+
+describe('fingerprintStrategy: method+path — path and query string variations', () => {
+  // The fingerprint is stored in the record, not in the store key.
+  // acquire() always receives the raw idempotency key — fingerprinting
+  // only affects what gets stored in the record and validated on duplicates.
+
+  it('stores correct fingerprint for path without query string', async () => {
+    const { module, store } = makeModule({}, { fingerprintStrategy: 'method+path' })
+    const ctx = makeCtx({ path: '/orders/123', headers: { 'idempotency-key': 'order-123' } })
+    await module.execute(
+      ctx,
+      makeNext(() => {
+        ctx.response = {}
+      }),
+    )
+    expect(store.set).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        fingerprint: createHash('sha256').update('POST:/orders/123').digest('hex'),
+      }),
+      expect.any(Number),
+    )
+  })
+
+  it('stores correct fingerprint for path with query string', async () => {
+    const { module, store } = makeModule({}, { fingerprintStrategy: 'method+path' })
+    const ctx = makeCtx({
+      path: '/orders?param=value',
+      headers: { 'idempotency-key': 'order-123' },
+    })
+    await module.execute(
+      ctx,
+      makeNext(() => {
+        ctx.response = {}
+      }),
+    )
+    expect(store.set).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        fingerprint: createHash('sha256').update('POST:/orders?param=value').digest('hex'),
+      }),
+      expect.any(Number),
+    )
+  })
+
+  it('stores correct fingerprint for path with dynamic segment and query string', async () => {
+    const { module, store } = makeModule({}, { fingerprintStrategy: 'method+path' })
+    const ctx = makeCtx({
+      path: '/orders/123?param=value',
+      headers: { 'idempotency-key': 'order-123' },
+    })
+    await module.execute(
+      ctx,
+      makeNext(() => {
+        ctx.response = {}
+      }),
+    )
+    expect(store.set).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        fingerprint: createHash('sha256').update('POST:/orders/123?param=value').digest('hex'),
+      }),
+      expect.any(Number),
+    )
+  })
+
+  it('normalizes trailing slash — /orders/123/ and /orders/123 produce same fingerprint', async () => {
+    const expectedFingerprint = createHash('sha256').update('POST:/orders/123').digest('hex')
+    const record: IdempotencyRecord = {
+      status: 'completed',
+      response: { id: 'order_1' },
+      statusCode: 201,
+      fingerprint: expectedFingerprint,
+    }
+    const { module } = makeModule(
+      {
+        acquire: jest
+          .fn<(key: string, ttl?: number) => Promise<boolean>>()
+          .mockResolvedValue(false),
+        get: jest
+          .fn<(key: string) => Promise<IdempotencyRecord | null>>()
+          .mockResolvedValue(record),
+      },
+      { fingerprintStrategy: 'method+path' },
+    )
+    // Trailing slash — should match fingerprint stored without it
+    const ctx = makeCtx({ path: '/orders/123/', headers: { 'idempotency-key': 'order-123' } })
+    await module.execute(ctx, noopHandler)
+    expect(ctx.statusCode).toBe(201) // matched — not 422
+  })
+
+  it('different paths produce different fingerprints → 422', async () => {
+    const record: IdempotencyRecord = {
+      status: 'completed',
+      response: { id: 'order_1' },
+      statusCode: 201,
+      fingerprint: createHash('sha256').update('POST:/orders/123').digest('hex'),
+    }
+    const { module } = makeModule(
+      {
+        acquire: jest
+          .fn<(key: string, ttl?: number) => Promise<boolean>>()
+          .mockResolvedValue(false),
+        get: jest
+          .fn<(key: string) => Promise<IdempotencyRecord | null>>()
+          .mockResolvedValue(record),
+      },
+      { fingerprintStrategy: 'method+path' },
+    )
+    // Different dynamic segment — different operation
+    const ctx = makeCtx({ path: '/orders/456', headers: { 'idempotency-key': 'order-123' } })
+    await module.execute(ctx, noopHandler)
+    expect(ctx.statusCode).toBe(422)
+  })
+
+  it('different query params produce different fingerprints → 422', async () => {
+    const record: IdempotencyRecord = {
+      status: 'completed',
+      response: { id: 'order_1' },
+      statusCode: 201,
+      fingerprint: createHash('sha256').update('POST:/orders?amount=100').digest('hex'),
+    }
+    const { module } = makeModule(
+      {
+        acquire: jest
+          .fn<(key: string, ttl?: number) => Promise<boolean>>()
+          .mockResolvedValue(false),
+        get: jest
+          .fn<(key: string) => Promise<IdempotencyRecord | null>>()
+          .mockResolvedValue(record),
+      },
+      { fingerprintStrategy: 'method+path' },
+    )
+    const ctx = makeCtx({ path: '/orders?amount=999', headers: { 'idempotency-key': 'order-123' } })
+    await module.execute(ctx, noopHandler)
+    expect(ctx.statusCode).toBe(422)
+  })
+
+  it('normalizes query param order — ?b=2&a=1 same fingerprint as ?a=1&b=2', async () => {
+    const expectedFingerprint = createHash('sha256').update('POST:/orders?a=1&b=2').digest('hex')
+    const record: IdempotencyRecord = {
+      status: 'completed',
+      response: { id: 'order_1' },
+      statusCode: 201,
+      fingerprint: expectedFingerprint,
+    }
+    const { module } = makeModule(
+      {
+        acquire: jest
+          .fn<(key: string, ttl?: number) => Promise<boolean>>()
+          .mockResolvedValue(false),
+        get: jest
+          .fn<(key: string) => Promise<IdempotencyRecord | null>>()
+          .mockResolvedValue(record),
+      },
+      { fingerprintStrategy: 'method+path' },
+    )
+    const ctx = makeCtx({ path: '/orders?b=2&a=1', headers: { 'idempotency-key': 'order-123' } })
+    await module.execute(ctx, noopHandler)
+    expect(ctx.statusCode).toBe(201) // matched — not 422
+  })
+
+  it('acquire() always receives raw idempotency key — not fingerprint', async () => {
+    const { module, store } = makeModule({}, { fingerprintStrategy: 'method+path' })
+    const ctx = makeCtx({
+      path: '/orders/123?param=value',
+      headers: { 'idempotency-key': 'order-123' },
+    })
+    await module.execute(
+      ctx,
+      makeNext(() => {
+        ctx.response = {}
+      }),
+    )
+    // acquire() key is the idempotency key (raw) — fingerprint is stored separately in the record
+    expect(store.acquire).toHaveBeenCalledWith('order-123', expect.any(Number))
+  })
+})
+
+// ─── full fingerprint strategy — path, query string, and body handling ────────
+
+describe('fingerprintStrategy: full — path, query string, and body variations', () => {
+  it('stores correct fingerprint for path without query string', async () => {
+    const body = { amount: 100 }
+    const expected = createHash('sha256')
+      .update(`POST:/orders/123:${JSON.stringify(body)}`)
+      .digest('hex')
+    const { module, store } = makeModule({}, { fingerprintStrategy: 'full' })
+    const ctx = makeCtx({ path: '/orders/123', body, headers: { 'idempotency-key': 'order-123' } })
+    await module.execute(
+      ctx,
+      makeNext(() => {
+        ctx.response = {}
+      }),
+    )
+    expect(store.set).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ fingerprint: expected }),
+      expect.any(Number),
+    )
+  })
+
+  it('stores correct fingerprint for path with query string', async () => {
+    const body = { amount: 100 }
+    const expected = createHash('sha256')
+      .update(`POST:/orders?param=value:${JSON.stringify(body)}`)
+      .digest('hex')
+    const { module, store } = makeModule({}, { fingerprintStrategy: 'full' })
+    const ctx = makeCtx({
+      path: '/orders?param=value',
+      body,
+      headers: { 'idempotency-key': 'order-123' },
+    })
+    await module.execute(
+      ctx,
+      makeNext(() => {
+        ctx.response = {}
+      }),
+    )
+    expect(store.set).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ fingerprint: expected }),
+      expect.any(Number),
+    )
+  })
+
+  it('stores correct fingerprint for path with dynamic segment and query string', async () => {
+    const body = { amount: 100 }
+    const expected = createHash('sha256')
+      .update(`POST:/orders/123?param=value:${JSON.stringify(body)}`)
+      .digest('hex')
+    const { module, store } = makeModule({}, { fingerprintStrategy: 'full' })
+    const ctx = makeCtx({
+      path: '/orders/123?param=value',
+      body,
+      headers: { 'idempotency-key': 'order-123' },
+    })
+    await module.execute(
+      ctx,
+      makeNext(() => {
+        ctx.response = {}
+      }),
+    )
+    expect(store.set).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ fingerprint: expected }),
+      expect.any(Number),
+    )
+  })
+
+  it('normalizes trailing slash in full fingerprint', async () => {
+    const body = { amount: 100 }
+    const expectedFingerprint = createHash('sha256')
+      .update(`POST:/orders/123:${JSON.stringify(body)}`)
+      .digest('hex')
+    const record: IdempotencyRecord = {
+      status: 'completed',
+      response: { id: 'order_1' },
+      statusCode: 201,
+      fingerprint: expectedFingerprint,
+    }
+    const { module } = makeModule(
+      {
+        acquire: jest
+          .fn<(key: string, ttl?: number) => Promise<boolean>>()
+          .mockResolvedValue(false),
+        get: jest
+          .fn<(key: string) => Promise<IdempotencyRecord | null>>()
+          .mockResolvedValue(record),
+      },
+      { fingerprintStrategy: 'full' },
+    )
+    const ctx = makeCtx({ path: '/orders/123/', body, headers: { 'idempotency-key': 'order-123' } })
+    await module.execute(ctx, noopHandler)
+    expect(ctx.statusCode).toBe(201) // matched — not 422
+  })
+
+  it('different body with same path produces different fingerprint → 422', async () => {
+    const record: IdempotencyRecord = {
+      status: 'completed',
+      response: { id: 'order_1' },
+      statusCode: 201,
+      fingerprint: createHash('sha256')
+        .update(`POST:/orders/123:${JSON.stringify({ amount: 100 })}`)
+        .digest('hex'),
+    }
+
+    const { module } = makeModule(
+      {
+        acquire: jest
+          .fn<(key: string, ttl?: number) => Promise<boolean>>()
+          .mockResolvedValue(false),
+        get: jest
+          .fn<(key: string) => Promise<IdempotencyRecord | null>>()
+          .mockResolvedValue(record),
+      },
+      { fingerprintStrategy: 'full' },
+    )
+    const ctx = makeCtx({
+      path: '/orders/123',
+      body: { amount: 999 },
+      headers: { 'idempotency-key': 'order-123' },
+    })
+    await module.execute(ctx, noopHandler)
+    expect(ctx.statusCode).toBe(422)
+  })
+
+  it('same path, same body, different query string → 422', async () => {
+    const body = { amount: 100 }
+    const record: IdempotencyRecord = {
+      status: 'completed',
+      response: { id: 'order_1' },
+      statusCode: 201,
+      fingerprint: createHash('sha256')
+        .update(`POST:/orders?currency=USD:${JSON.stringify(body)}`)
+        .digest('hex'),
+    }
+    const { module } = makeModule(
+      {
+        acquire: jest
+          .fn<(key: string, ttl?: number) => Promise<boolean>>()
+          .mockResolvedValue(false),
+        get: jest
+          .fn<(key: string) => Promise<IdempotencyRecord | null>>()
+          .mockResolvedValue(record),
+      },
+      { fingerprintStrategy: 'full' },
+    )
+    const ctx = makeCtx({
+      path: '/orders?currency=EUR',
+      body,
+      headers: { 'idempotency-key': 'order-123' },
+    })
+    await module.execute(ctx, noopHandler)
+    expect(ctx.statusCode).toBe(422)
+  })
+
+  it('same path, empty body, different query string → 422', async () => {
+    const body = undefined
+    const record: IdempotencyRecord = {
+      status: 'completed',
+      response: { id: 'order_1' },
+      statusCode: 201,
+      fingerprint: createHash('sha256')
+        .update(`POST:/orders?currency=USD:${JSON.stringify(body)}`)
+        .digest('hex'),
+    }
+    const { module } = makeModule(
+      {
+        acquire: jest
+          .fn<(key: string, ttl?: number) => Promise<boolean>>()
+          .mockResolvedValue(false),
+        get: jest
+          .fn<(key: string) => Promise<IdempotencyRecord | null>>()
+          .mockResolvedValue(record),
+      },
+      { fingerprintStrategy: 'full' },
+    )
+    const ctx = makeCtx({
+      path: '/orders?currency=EUR',
+      body,
+      headers: { 'idempotency-key': 'order-123' },
+    })
+    await module.execute(ctx, noopHandler)
+    expect(ctx.statusCode).toBe(422)
+  })
+
+  it('empty path, empty body, no query string → 422', async () => {
+    const body = undefined
+    const record: IdempotencyRecord = {
+      status: 'completed',
+      response: { id: 'order_1' },
+      statusCode: 201,
+      fingerprint: createHash('sha256')
+        .update(`POST:/:${JSON.stringify(body)}`)
+        .digest('hex'),
+    }
+    const { module } = makeModule(
+      {
+        acquire: jest
+          .fn<(key: string, ttl?: number) => Promise<boolean>>()
+          .mockResolvedValue(false),
+        get: jest
+          .fn<(key: string) => Promise<IdempotencyRecord | null>>()
+          .mockResolvedValue(record),
+      },
+      { fingerprintStrategy: 'full' },
+    )
+    const ctx = makeCtx({
+      path: '/',
+      body,
+      headers: { 'idempotency-key': 'order-123' },
+    })
+    await module.execute(ctx, noopHandler)
+    expect(ctx.statusCode).toBe(422)
+  })
+
+  it('normalizes query param order in full fingerprint', async () => {
+    const body = { amount: 100 }
+    const expectedFingerprint = createHash('sha256')
+      .update(`POST:/orders?a=1&b=2:${JSON.stringify(body)}`)
+      .digest('hex')
+    const record: IdempotencyRecord = {
+      status: 'completed',
+      response: { id: 'order_1' },
+      statusCode: 201,
+      fingerprint: expectedFingerprint,
+    }
+    const { module } = makeModule(
+      {
+        acquire: jest
+          .fn<(key: string, ttl?: number) => Promise<boolean>>()
+          .mockResolvedValue(false),
+        get: jest
+          .fn<(key: string) => Promise<IdempotencyRecord | null>>()
+          .mockResolvedValue(record),
+      },
+      { fingerprintStrategy: 'full' },
+    )
+    const ctx = makeCtx({
+      path: '/orders?b=2&a=1',
+      body,
+      headers: { 'idempotency-key': 'order-123' },
+    })
+    await module.execute(ctx, noopHandler)
+    expect(ctx.statusCode).toBe(201) // matched — not 422
+  })
+
+  it('acquire() always receives raw idempotency key — not fingerprint', async () => {
+    const { module, store } = makeModule({}, { fingerprintStrategy: 'full' })
+    const ctx = makeCtx({
+      path: '/orders/123?param=value',
+      body: { amount: 100 },
+      headers: { 'idempotency-key': 'order-123' },
+    })
+    await module.execute(
+      ctx,
+      makeNext(() => {
+        ctx.response = {}
+      }),
+    )
+    expect(store.acquire).toHaveBeenCalledWith('order-123', expect.any(Number))
   })
 })

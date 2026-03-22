@@ -26,6 +26,8 @@ const { reliability, Framework } = require('reliability-kit')
 
 ## Quick Start
 
+### Express
+
 ```typescript
 import express from 'express'
 import { reliability, Framework, MemoryStore } from 'reliability-kit'
@@ -50,6 +52,33 @@ app.post('/orders', (req, res) => {
 app.listen(3000)
 ```
 
+### Fastify
+
+```typescript
+import Fastify from 'fastify'
+import { reliability, Framework, MemoryStore } from 'reliability-kit'
+
+const fastify = Fastify()
+
+const protect = reliability({
+  framework: Framework.FASTIFY,
+  idempotency: {
+    enabled: true,
+    store: new MemoryStore(), // use RedisStore in production
+  },
+})
+
+// wrap individual routes — explicit per-route control
+fastify.post(
+  '/orders',
+  protect(async (request, reply) => {
+    reply.status(201).send({ id: 'order_1', created: true })
+  }),
+)
+
+fastify.listen({ port: 3000 })
+```
+
 ```bash
 # first request — handler executes
 curl -X POST http://localhost:3000/orders \
@@ -70,6 +99,8 @@ curl -X POST http://localhost:3000/orders \
 
 Use `RedisStore` in production — it works correctly across multiple instances and server restarts.
 
+### Express
+
 ```typescript
 import { reliability, Framework, RedisStore } from 'reliability-kit'
 import Redis from 'ioredis'
@@ -82,11 +113,36 @@ app.use(
       store: new RedisStore(new Redis()),
       ttl: 86400, // cache responses for 24 hours
       processingTtl: 30, // lock expires after 30s if process crashes
-      duplicateStrategy: 'cache', // return cached response transparently
-      onStoreFailure: 'strict', // throw on store errors (recommended for payments)
+      duplicateStrategy: 'cache',
+      onStoreFailure: 'strict',
+      fingerprintStrategy: 'full', // validates method + path + body
     },
   }),
 )
+```
+
+### Fastify
+
+```typescript
+import { reliability, Framework, RedisStore } from 'reliability-kit'
+import Redis from 'ioredis'
+
+const protect = reliability({
+  framework: Framework.FASTIFY,
+  idempotency: {
+    enabled: true,
+    store: new RedisStore(new Redis()),
+    ttl: 86400,
+    processingTtl: 30,
+    duplicateStrategy: 'cache',
+    onStoreFailure: 'strict',
+    fingerprintStrategy: 'full', // validates method + path + body
+  },
+})
+
+fastify.post('/orders', protect(createOrderHandler))
+fastify.post('/payments', protect(createPaymentHandler))
+fastify.get('/health', healthHandler) // ← unwrapped, no idempotency
 ```
 
 ---
@@ -100,34 +156,35 @@ Prevents duplicate execution of request handlers. Built for payment flows, order
 - Atomic locking via Redis `SET NX EX` or Node.js single-threaded guarantees
 - Pluggable store interface — bring your own Redis, SQL, DynamoDB, or custom backend
 - Best-effort mode for stores without `acquire()` — no lock needed
+- Fingerprint validation — detects key reuse across different requests (`method`, `method+path`, `full`)
 - Configurable duplicate strategies (`cache` or `reject`)
 - Configurable failure modes (`strict` or `bypass`)
 - `Retry-After` header on in-progress responses
 
-→ [Full documentation](./src/modules/idempotency/docs.md)
+→ [Full documentation](./docs/idempotency.md)
 
 ---
 
 ## Stores
 
-| Store                       | Use for                                |
-| --------------------------- | -------------------------------------- |
-| `MemoryStore`               | Local development, testing             |
-| `RedisStore`                | Production, multi-instance deployments |
-| Custom with `acquire()`     | SQL, DynamoDB, MongoDB — full concurrency safety |
-| Custom without `acquire()`  | Analytics, reads, low-risk ops — best-effort only |
+| Store                      | Use for                                           |
+| -------------------------- | ------------------------------------------------- |
+| `MemoryStore`              | Local development, testing                        |
+| `RedisStore`               | Production, multi-instance deployments            |
+| Custom with `acquire()`    | SQL, DynamoDB, MongoDB — full concurrency safety  |
+| Custom without `acquire()` | Analytics, reads, low-risk ops — best-effort only |
 
 ---
 
 ## Frameworks
 
-| Framework           | Status       |
-| ------------------- | ------------ |
-| `Framework.EXPRESS` | ✅ Supported |
-| `Framework.FASTIFY` | 🚧 Planned   |
-| `Framework.HONO`    | 🚧 Planned   |
-| `Framework.KOA`     | 🚧 Planned   |
-| `Framework.NEXTJS`  | 🚧 Planned   |
+| Framework           | Status       | Pattern                                     |
+| ------------------- | ------------ | ------------------------------------------- |
+| `Framework.EXPRESS` | ✅ Supported | Global, per-router, or per-route middleware |
+| `Framework.FASTIFY` | ✅ Supported | Per-route wrapper function                  |
+| `Framework.HONO`    | 🚧 Planned   | —                                           |
+| `Framework.KOA`     | 🚧 Planned   | —                                           |
+| `Framework.NEXTJS`  | 🚧 Planned   | —                                           |
 
 ---
 
@@ -151,7 +208,7 @@ try {
 
 ## Zero Dependencies
 
-reliability-kit has no runtime dependencies. Bring your own Redis client (ioredis, node-redis) and Express version — any client that satisfies the minimal interface will work.
+reliability-kit has no runtime dependencies. Bring your own Redis client (ioredis, node-redis) and framework — any client that satisfies the minimal interface will work.
 
 ---
 
