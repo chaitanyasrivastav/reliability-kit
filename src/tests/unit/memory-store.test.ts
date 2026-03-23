@@ -320,3 +320,109 @@ describe('key isolation', () => {
     expect(await store.acquire('lock-b', 30)).toBe(false)
   })
 })
+
+// ─── Fingerprint storage and retrieval ───────────────────────────────────────
+
+describe('fingerprint — storage and retrieval', () => {
+  it('stores and retrieves fingerprint correctly', async () => {
+    const store = new MemoryStore()
+    await store.set(
+      'fp-key',
+      { status: 'completed', response: {}, statusCode: 200, fingerprint: 'POST' },
+      60,
+    )
+    const result = await store.get('fp-key')
+    expect(result?.fingerprint).toBe('POST')
+  })
+
+  it('stores and retrieves SHA-256 fingerprint for method+path strategy', async () => {
+    const store = new MemoryStore()
+    const fingerprint = 'a3f8c2d1e4b7f9c0d2e5f8a1b4c7d0e3f6a9b2c5'
+    await store.set(
+      'fp-path-key',
+      { status: 'completed', response: {}, statusCode: 200, fingerprint },
+      60,
+    )
+    const result = await store.get('fp-path-key')
+    expect(result?.fingerprint).toBe(fingerprint)
+  })
+
+  it('returns undefined fingerprint when record has none — v0.1.x backward compat', async () => {
+    const store = new MemoryStore()
+    // Simulate a record written by v0.1.x — no fingerprint field
+    await store.set('old-key', { status: 'completed', response: {}, statusCode: 200 }, 60)
+    const result = await store.get('old-key')
+    expect(result?.fingerprint).toBeUndefined()
+  })
+
+  it('does not set fingerprint to empty string — undefined is correct sentinel', async () => {
+    const store = new MemoryStore()
+    await store.set('no-fp-key', { status: 'completed', response: {}, statusCode: 200 }, 60)
+    const result = await store.get('no-fp-key')
+    expect(result?.fingerprint).not.toBe('')
+  })
+
+  it('fingerprint survives a full acquire → set → get cycle', async () => {
+    const store = new MemoryStore()
+    const fingerprint = 'POST'
+
+    await store.acquire('cycle-key', 30)
+    await store.set(
+      'cycle-key',
+      { status: 'completed', response: { id: 'order_1' }, statusCode: 201, fingerprint },
+      3600,
+    )
+    const result = await store.get('cycle-key')
+
+    expect(result?.fingerprint).toBe(fingerprint)
+    expect(result?.response).toEqual({ id: 'order_1' })
+    expect(result?.statusCode).toBe(201)
+  })
+
+  it('fingerprint survives TTL — present before expiry, gone after', async () => {
+    const store = new MemoryStore()
+    await store.set(
+      'fp-ttl-key',
+      { status: 'completed', response: {}, statusCode: 200, fingerprint: 'POST' },
+      1,
+    )
+
+    expect((await store.get('fp-ttl-key'))?.fingerprint).toBe('POST')
+
+    jest.advanceTimersByTime(1001)
+
+    expect(await store.get('fp-ttl-key')).toBeNull()
+  })
+
+  it('different fingerprints on different keys do not collide', async () => {
+    const store = new MemoryStore()
+    await store.set(
+      'key-a',
+      { status: 'completed', response: {}, statusCode: 200, fingerprint: 'GET' },
+      60,
+    )
+    await store.set(
+      'key-b',
+      { status: 'completed', response: {}, statusCode: 200, fingerprint: 'POST' },
+      60,
+    )
+
+    expect((await store.get('key-a'))?.fingerprint).toBe('GET')
+    expect((await store.get('key-b'))?.fingerprint).toBe('POST')
+  })
+
+  it('overwriting a record replaces the fingerprint', async () => {
+    const store = new MemoryStore()
+    await store.set(
+      'overwrite-fp-key',
+      { status: 'completed', response: { v: 1 }, statusCode: 200, fingerprint: 'GET' },
+      60,
+    )
+    await store.set(
+      'overwrite-fp-key',
+      { status: 'completed', response: { v: 2 }, statusCode: 200, fingerprint: 'POST' },
+      60,
+    )
+    expect((await store.get('overwrite-fp-key'))?.fingerprint).toBe('POST')
+  })
+})

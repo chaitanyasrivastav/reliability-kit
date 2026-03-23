@@ -42,8 +42,24 @@ export interface IdempotencyRecord {
    */
   status?: 'processing' | 'completed'
 
-  // Optional fingerprint for debugging and testing — not used by the module.
-  fingerprint?: string
+  /**
+   * A short string that identifies the shape of the original request.
+   * Stored alongside the response on first execution and validated on
+   * every subsequent duplicate to detect key reuse across different requests.
+   *
+   * The value depends on fingerprintStrategy:
+   *   'method'      → raw HTTP method string e.g. 'POST'
+   *   'method+path' → SHA-256 of method + normalized path + query string
+   *   'full'        → SHA-256 of method + path + JSON-serialized body
+   *
+   * Optional — records written before fingerprinting was introduced (v0.1.x)
+   * have no fingerprint. The module skips validation for these records
+   * gracefully so rolling upgrades work without 422 errors on existing keys.
+   *
+   * A mismatch between the incoming request fingerprint and the stored
+   * fingerprint returns 422 — the client reused a key for a different request.
+   */
+  fingerprint?: string | undefined
 }
 
 /**

@@ -474,3 +474,104 @@ describe('key isolation', () => {
     expect(await store.get('del-b')).not.toBeNull()
   })
 })
+
+// ─── Fingerprint storage and retrieval ───────────────────────────────────────
+
+describe('fingerprint — storage and retrieval', () => {
+  it('serialises fingerprint into the stored payload', async () => {
+    const { client, db } = makeRedisStub()
+    const store = new RedisStore(client)
+    await store.set(
+      'fp-key',
+      { status: 'completed', response: {}, statusCode: 200, fingerprint: 'POST' },
+      60,
+    )
+    expect(JSON.parse(db.get('idem:fp-key')!)).toMatchObject({ fingerprint: 'POST' })
+  })
+
+  it('returns fingerprint from get() after set()', async () => {
+    const { client } = makeRedisStub()
+    const store = new RedisStore(client)
+    await store.set(
+      'fp-key',
+      { status: 'completed', response: {}, statusCode: 200, fingerprint: 'POST' },
+      60,
+    )
+    const result = await store.get('fp-key')
+    expect(result?.fingerprint).toBe('POST')
+  })
+
+  it('returns SHA-256 fingerprint for method+path strategy', async () => {
+    const { client } = makeRedisStub()
+    const store = new RedisStore(client)
+    const fingerprint = 'a3f8c2d1e4b7f9c0d2e5f8a1b4c7d0e3f6a9b2c5'
+    await store.set(
+      'fp-path-key',
+      { status: 'completed', response: {}, statusCode: 200, fingerprint },
+      60,
+    )
+    const result = await store.get('fp-path-key')
+    expect(result?.fingerprint).toBe(fingerprint)
+  })
+
+  it('omits fingerprint from payload when not provided', async () => {
+    const { client, db } = makeRedisStub()
+    const store = new RedisStore(client)
+    await store.set('no-fp-key', { status: 'completed', response: {}, statusCode: 200 }, 60)
+    expect(JSON.parse(db.get('idem:no-fp-key')!)).not.toHaveProperty('fingerprint')
+  })
+
+  it('returns undefined fingerprint when record has none — v0.1.x backward compat', async () => {
+    const { client, db } = makeRedisStub()
+    const store = new RedisStore(client)
+    // Simulate a record written by v0.1.x — no fingerprint field
+    db.set('idem:old-key', JSON.stringify({ status: 'completed', response: {}, statusCode: 200 }))
+    const result = await store.get('old-key')
+    expect(result?.fingerprint).toBeUndefined()
+  })
+
+  it('does not set fingerprint to empty string — undefined is correct sentinel', async () => {
+    const { client, db } = makeRedisStub()
+    const store = new RedisStore(client)
+    db.set('idem:old-key', JSON.stringify({ status: 'completed', response: {}, statusCode: 200 }))
+    const result = await store.get('old-key')
+    expect(result?.fingerprint).not.toBe('')
+  })
+
+  it('fingerprint survives a full acquire → set → get cycle', async () => {
+    const { client } = makeRedisStub()
+    const store = new RedisStore(client)
+    const fingerprint = 'POST'
+
+    await store.acquire('cycle-key', 30)
+    await store.set(
+      'cycle-key',
+      { status: 'completed', response: { id: 'order_1' }, statusCode: 201, fingerprint },
+      3600,
+    )
+    const result = await store.get('cycle-key')
+
+    expect(result?.fingerprint).toBe(fingerprint)
+    expect(result?.response).toEqual({ id: 'order_1' })
+    expect(result?.statusCode).toBe(201)
+  })
+
+  it('different fingerprints stored on different keys do not collide', async () => {
+    const { client } = makeRedisStub()
+    const store = new RedisStore(client)
+
+    await store.set(
+      'key-a',
+      { status: 'completed', response: {}, statusCode: 200, fingerprint: 'GET' },
+      60,
+    )
+    await store.set(
+      'key-b',
+      { status: 'completed', response: {}, statusCode: 200, fingerprint: 'POST' },
+      60,
+    )
+
+    expect((await store.get('key-a'))?.fingerprint).toBe('GET')
+    expect((await store.get('key-b'))?.fingerprint).toBe('POST')
+  })
+})
