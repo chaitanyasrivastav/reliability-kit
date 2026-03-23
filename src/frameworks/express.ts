@@ -78,16 +78,16 @@ export function expressAdapter(options: ReliabilityOptions): RequestHandler {
     const originalJson = res.json.bind(res)
     const originalEnd = res.end.bind(res)
 
-    res.send = (body: unknown) => {
-      ctx.response = body
-      ctx.statusCode = res.statusCode
-      return originalSend(body)
-    }
-
     res.json = (body: unknown) => {
       ctx.response = body
       ctx.statusCode = res.statusCode
       return originalJson(body)
+    }
+
+    res.send = (body: unknown) => {
+      ctx.response = body
+      ctx.statusCode = res.statusCode
+      return originalSend(body)
     }
 
     // res.end() is the lowest-level write method — underlying both send()

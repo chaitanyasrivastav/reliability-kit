@@ -13,7 +13,7 @@ import { IdempotencyStore, IdempotencyRecord } from './store'
  */
 type StoredRecord =
   | { status: 'processing' }
-  | { status: 'completed'; response: unknown; statusCode?: number }
+  | { status: 'completed'; response: unknown; statusCode?: number; fingerprint?: string }
 
 /**
  * Minimal Redis client contract the store depends on.
@@ -35,7 +35,6 @@ type StoredRecord =
  */
 export interface RedisClient {
   get(key: string): Promise<string | null>
-  set(key: string, value: string): Promise<string | null>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   set(key: string, value: string, ...args: any[]): Promise<string | null>
   del(key: string): Promise<number>
@@ -129,6 +128,7 @@ export class RedisStore implements IdempotencyStore {
       status: 'completed',
       response: record.response,
       statusCode: record.statusCode ?? 200,
+      fingerprint: record.fingerprint,
     }
   }
 
@@ -155,6 +155,12 @@ export class RedisStore implements IdempotencyStore {
       // between "statusCode was 0" and "statusCode was not set".
       ...(value.statusCode !== undefined && {
         statusCode: value.statusCode,
+      }),
+      // Only include fingerprint if present — records written without a
+      // fingerprintStrategy have no fingerprint and the module skips
+      // validation for them gracefully.
+      ...(value.fingerprint !== undefined && {
+        fingerprint: value.fingerprint,
       }),
     }
 
