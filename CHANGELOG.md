@@ -5,6 +5,7 @@
 - Express adapter: guard `res.send` from overwriting `ctx.response` already
   captured by `res.json` — prevents cached responses from being
   double-serialized as a JSON string instead of a JSON object
+- Redis persistence of fingerprint alongside cached response
 
 ## 0.2.1 — 2026-03-22
 
