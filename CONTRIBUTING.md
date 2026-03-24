@@ -48,40 +48,63 @@ npm test
 
 ```
 reliability-kit/
-├── src/
+├── packages/
 │   ├── core/
-│   │   ├── context.ts              # RequestContext interface
-│   │   ├── engine.ts               # ReliabilityEngine — middleware chain
-│   │   └── module.ts               # ReliabilityModule interface
-│   ├── frameworks/
-│   │   └── express.ts              # Express adapter
-│   ├── middleware/
-│   │   ├── reliability.ts          # Public entry point
-│   │   └── validation.ts           # Startup validation
-│   ├── modules/
-│   │   └── idempotency/
-│   │       ├── idempotency.ts      # IdempotencyModule
-│   │       └── stores/
-│   │           ├── store.ts        # IdempotencyStore interface
-│   │           ├── memory-store.ts
-│   │           └── redis-store.ts
-│   ├── types/
-│   │   ├── framework.ts            # Framework enum
-│   │   └── options.ts              # ReliabilityOptions
-│   ├── tests/
-│   │   ├── unit/
-│   │   │   ├── idempotency.test.ts
-│   │   │   ├── memory-store.test.ts
-│   │   │   └── redis-store.test.ts
-│   │   └── integration/
-│   │       ├── express-adapter.test.ts
-│   │       └── concurrency.test.ts
-│   └── index.ts                    # Public exports
+│   │   ├── src/
+│   │   │   ├── core/
+│   │   │   │   ├── context.ts              # RequestContext interface
+│   │   │   │   ├── engine.ts               # ReliabilityEngine
+│   │   │   │   └── module.ts               # ReliabilityModule interface
+│   │   │   ├── modules/
+│   │   │   │   └── idempotency/
+│   │   │   │       ├── idempotency.ts      # IdempotencyModule
+│   │   │   │       └── stores/
+│   │   │   │           ├── store.ts        # IdempotencyStore interface
+│   │   │   │           ├── memory-store.ts
+│   │   │   │           └── redis-store.ts
+│   │   │   ├── types/
+│   │   │   │   └── options.ts              # ReliabilityOptions
+│   │   │   ├── validation/
+│   │   │   │   └── validation.ts           # Startup validation
+│   │   │   └── index.ts                    # Public exports
+│   │   ├── tests/
+│   │   │   ├── unit/
+│   │   │   └── integration/
+│   │   ├── tsconfig.json
+│   │   ├── tsup.config.ts
+│   │   └── package.json                    # name: @reliability/core
+│   │
+│   ├── express/
+│   │   ├── src/
+│   │   │   ├── adapter.ts                 # Express adapter
+│   │   │   └── index.ts                   # export reliability()
+│   │   ├── tests/
+│   │   │   └── express-adapter.test.ts
+│   │   ├── tsconfig.json
+│   │   ├── tsup.config.ts
+│   │   └── package.json                   # name: @reliability/express
+│   │                                        # depends on @reliability/core
+│   │
+│   ├── fastify/
+│   │   ├── src/
+│   │   │   ├── adapter.ts                 # Fastify wrapper
+│   │   │   └── index.ts                   # export reliability()
+│   │   ├── tests/
+│   │   │   └── fastify-adapter.test.ts
+│   │   ├── tsconfig.json
+│   │   ├── tsup.config.ts
+│   │   └── package.json                   # name: @reliability/fastify
+│   │                                        # depends on @reliability/core
+│
 ├── docs/
 │   └── idempotency.md
-├── tsup.config.ts
-├── tsconfig.json
-└── package.json
+│
+├── package.json                           # root (workspaces + scripts)
+├── tsconfig.base.json                     # shared config (recommended)
+├── eslint.config.mts
+├── .prettierrc
+├── .gitignore
+└── README.md
 ```
 
 ---
