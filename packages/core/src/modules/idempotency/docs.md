@@ -7,17 +7,19 @@ Ensures that duplicate requests with the same key are processed only once — pr
 ## Installation
 
 ```bash
-npm install reliability-kit
+npm install @reliability/express
+# or
+npm install @reliability/fastify
 ```
 
 Supports both CommonJS (`require`) and ESM (`import`).
 
 ```typescript
 // ESM
-import { reliability, Framework } from 'reliability-kit'
+import { reliability } from '@reliability/express'
 
 // CommonJS
-const { reliability, Framework } = require('reliability-kit')
+const { reliability } = require('@reliability/express')
 ```
 
 ---
@@ -92,7 +94,7 @@ Apply as middleware on the entire app — every route is automatically protected
 
 ```typescript
 import express from 'express'
-import { reliability, Framework, RedisStore } from 'reliability-kit'
+import { reliability, RedisStore } from '@reliability/express'
 import Redis from 'ioredis'
 
 const app = express()
@@ -100,7 +102,6 @@ app.use(express.json())
 
 app.use(
   reliability({
-    framework: Framework.EXPRESS,
     idempotency: {
       enabled: true,
       store: new RedisStore(new Redis()),
@@ -123,7 +124,7 @@ Apply idempotency only to a specific router — useful when only some routes nee
 
 ```typescript
 import express from 'express'
-import { reliability, Framework, RedisStore } from 'reliability-kit'
+import { reliability, MemoryStore } from '@reliability/express'
 
 const store = new RedisStore(new Redis())
 
@@ -132,7 +133,6 @@ const ordersRouter = express.Router()
 
 ordersRouter.use(
   reliability({
-    framework: Framework.EXPRESS,
     idempotency: { enabled: true, store, ttl: 86400 },
   }),
 )
@@ -155,7 +155,6 @@ Apply idempotency to individual routes by passing it as middleware inline.
 
 ```typescript
 const idempotency = reliability({
-  framework: Framework.EXPRESS,
   idempotency: { enabled: true, store },
 })
 
@@ -172,13 +171,12 @@ The Fastify adapter returns a **wrapper function** instead of middleware. Apply 
 
 ```typescript
 import Fastify from 'fastify'
-import { reliability, Framework, RedisStore } from 'reliability-kit'
+import { reliability, RedisStore } from '@reliability/fastify'
 import Redis from 'ioredis'
 
 const fastify = Fastify()
 
 const protect = reliability({
-  framework: Framework.FASTIFY,
   idempotency: {
     enabled: true,
     store: new RedisStore(new Redis()),
@@ -200,7 +198,6 @@ fastify.get('/health', healthHandler) // ← unwrapped, no idempotency
 
 | Option                            | Type                                  | Default             | Description                                            |
 | --------------------------------- | ------------------------------------- | ------------------- | ------------------------------------------------------ |
-| `framework`                       | `Framework`                           | required            | The web framework in use — see Frameworks below        |
 | `idempotency.enabled`             | `boolean`                             | `false`             | Enable the idempotency module                          |
 | `idempotency.store`               | `IdempotencyStore`                    | required            | Storage backend — see Stores below                     |
 | `idempotency.key`                 | `string`                              | `'Idempotency-Key'` | Request header name to read the idempotency key from   |
@@ -209,18 +206,6 @@ fastify.get('/health', healthHandler) // ← unwrapped, no idempotency
 | `idempotency.duplicateStrategy`   | `'cache' \| 'reject'`                 | `'cache'`           | What to do when a completed duplicate arrives          |
 | `idempotency.onStoreFailure`      | `'strict' \| 'bypass'`                | `'strict'`          | What to do when the store throws                       |
 | `idempotency.fingerprintStrategy` | `'method' \| 'method+path' \| 'full'` | `'method'`          | How strictly to validate duplicate requests            |
-
----
-
-## Frameworks
-
-| Framework           | Status       | Usage                                       |
-| ------------------- | ------------ | ------------------------------------------- |
-| `Framework.EXPRESS` | ✅ Supported | Global, per-router, or per-route middleware |
-| `Framework.FASTIFY` | ✅ Supported | Per-route wrapper function                  |
-| `Framework.HONO`    | 🚧 Planned   | —                                           |
-| `Framework.KOA`     | 🚧 Planned   | —                                           |
-| `Framework.NEXTJS`  | 🚧 Planned   | —                                           |
 
 ---
 
@@ -335,7 +320,7 @@ Records written before fingerprinting was introduced (v0.1.x) have no stored fin
 In-process store backed by a `Map`. State is not shared across instances or server restarts.
 
 ```typescript
-import { MemoryStore } from 'reliability-kit'
+import { MemoryStore } from '@reliability/express'
 
 const store = new MemoryStore()
 ```
@@ -354,8 +339,8 @@ const store = new MemoryStore()
 Distributed store backed by Redis. Works correctly across multiple instances and server restarts (within Redis durability limits).
 
 ```typescript
+import { RedisStore } from '@reliability/express'
 import Redis from 'ioredis'
-import { RedisStore } from 'reliability-kit'
 
 const store = new RedisStore(new Redis())
 ```
@@ -388,7 +373,7 @@ Implement the `IdempotencyStore` interface to use any backend. The module routes
 Use this for any backend that supports a conditional write. The module uses the locked path — only one request executes the handler per key.
 
 ```typescript
-import type { IdempotencyStore, IdempotencyRecord } from 'reliability-kit'
+const { IdempotencyStore, IdempotencyRecord } = require('@reliability/core')
 
 class PostgresStore implements IdempotencyStore {
   /**
@@ -517,7 +502,6 @@ class SimpleStore implements IdempotencyStore {
 }
 
 app.use(reliability({
-  framework: Framework.EXPRESS,
   idempotency: {
     enabled: true,
     store: new SimpleStore(),
@@ -605,7 +589,7 @@ Retry-After: 30
 Invalid configuration throws a `ReliabilityValidationError` at startup with all problems listed at once — so you fix everything in one go rather than discovering errors one by one.
 
 ```typescript
-import { ReliabilityValidationError } from 'reliability-kit'
+import { ReliabilityValidationError } from '@reliability/core'
 
 try {
   app.use(reliability(options))
