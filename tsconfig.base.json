@@ -28,6 +28,6 @@
     /* Performance */
     "skipLibCheck": true
   },
-  "include": ["src"],
+  "include": ["src", "src/core/module.ts", "src/core/context.ts", "src/core/engine.ts"],
   "exclude": ["node_modules", "dist"]
 }

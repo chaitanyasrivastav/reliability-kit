@@ -1,7 +1,6 @@
 import { describe, it, expect, jest } from '@jest/globals'
-import { expressAdapter } from '../../frameworks/express'
-import { Framework } from '../../types/framework'
-import { IdempotencyStore, IdempotencyRecord } from '../../modules/idempotency/stores/store'
+import { expressAdapter } from '../../adapter'
+import { createReliability, IdempotencyStore, IdempotencyRecord } from '@reliability/core'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -87,7 +86,8 @@ function makeStore(overrides: Partial<IdempotencyStore> = {}): jest.Mocked<Idemp
 describe('module composition', () => {
   it('does not add idempotency module when idempotency is not configured', async () => {
     const store = makeStore()
-    const middleware = expressAdapter({ framework: Framework.EXPRESS })
+    const { engine } = createReliability({})
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext(() => res.send({ ok: true }))
@@ -99,10 +99,10 @@ describe('module composition', () => {
 
   it('does not add idempotency module when enabled is false', async () => {
     const store = makeStore()
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: false, store },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext(() => res.send({ ok: true }))
@@ -114,10 +114,10 @@ describe('module composition', () => {
 
   it('adds idempotency module when enabled is true', async () => {
     const store = makeStore()
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext(() => res.send({ ok: true }))
@@ -133,10 +133,10 @@ describe('module composition', () => {
 describe('context mapping from req', () => {
   it('maps req.method to ctx.method', async () => {
     const store = makeStore()
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq({ method: 'PUT' })
     const res = makeRes()
     const next = makeNext(() => res.send({}))
@@ -150,10 +150,10 @@ describe('context mapping from req', () => {
 
   it('maps req.headers to ctx.headers', async () => {
     const store = makeStore()
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq({ headers: { 'idempotency-key': 'mapped-key' } })
     const res = makeRes()
     const next = makeNext(() => res.send({}))
@@ -165,10 +165,10 @@ describe('context mapping from req', () => {
 
   it('passes req.body through to ctx', async () => {
     const store = makeStore()
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq({ body: { amount: 500 } })
     const res = makeRes()
     const next = makeNext(() => res.send({}))
@@ -184,7 +184,8 @@ describe('context mapping from req', () => {
 
 describe('happy path — handler runs normally', () => {
   it('calls next() exactly once', async () => {
-    const middleware = expressAdapter({ framework: Framework.EXPRESS })
+    const { engine } = createReliability({})
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext(() => res.send({ ok: true }))
@@ -195,7 +196,8 @@ describe('happy path — handler runs normally', () => {
   })
 
   it('does not send a second response when handler already responded', async () => {
-    const middleware = expressAdapter({ framework: Framework.EXPRESS })
+    const { engine } = createReliability({})
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext(() => res.send({ ok: true }))
@@ -209,7 +211,8 @@ describe('happy path — handler runs normally', () => {
   })
 
   it('does not call res.status() when handler already responded', async () => {
-    const middleware = expressAdapter({ framework: Framework.EXPRESS })
+    const { engine } = createReliability({})
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext(() => res.send({ ok: true }))
@@ -225,10 +228,10 @@ describe('happy path — handler runs normally', () => {
 describe('response interception via res.send()', () => {
   it('captures body written by handler via res.send()', async () => {
     const store = makeStore()
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext(() => {
@@ -247,10 +250,10 @@ describe('response interception via res.send()', () => {
 
   it('captures statusCode written before res.send()', async () => {
     const store = makeStore()
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext(() => {
@@ -268,7 +271,8 @@ describe('response interception via res.send()', () => {
   })
 
   it('still forwards body to originalSend', async () => {
-    const middleware = expressAdapter({ framework: Framework.EXPRESS })
+    const { engine } = createReliability({})
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const body = { id: 'order_1' }
@@ -285,10 +289,10 @@ describe('response interception via res.send()', () => {
 describe('response interception via res.json()', () => {
   it('captures body written by handler via res.json()', async () => {
     const store = makeStore()
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext(() => {
@@ -306,7 +310,8 @@ describe('response interception via res.json()', () => {
   })
 
   it('still forwards body to originalJson', async () => {
-    const middleware = expressAdapter({ framework: Framework.EXPRESS })
+    const { engine } = createReliability({})
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const body = { result: 'ok' }
@@ -323,10 +328,10 @@ describe('response interception via res.json()', () => {
 describe('response interception via res.end()', () => {
   it('captures body written directly via res.end()', async () => {
     const store = makeStore()
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext(() => {
@@ -345,10 +350,10 @@ describe('response interception via res.end()', () => {
 
   it('does not overwrite ctx.response already set by res.send()', async () => {
     const store = makeStore()
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
 
@@ -368,7 +373,8 @@ describe('response interception via res.end()', () => {
   })
 
   it('still forwards body to originalEnd', async () => {
-    const middleware = expressAdapter({ framework: Framework.EXPRESS })
+    const { engine } = createReliability({})
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext(() => res.end('raw'))
@@ -387,10 +393,10 @@ describe('intercepted response — module short-circuits', () => {
       acquire: jest.fn<(key: string, ttl?: number) => Promise<boolean>>().mockResolvedValue(false),
       get: jest.fn<(key: string) => Promise<IdempotencyRecord | null>>().mockResolvedValue(null),
     })
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext()
@@ -406,10 +412,10 @@ describe('intercepted response — module short-circuits', () => {
       acquire: jest.fn<(key: string, ttl?: number) => Promise<boolean>>().mockResolvedValue(false),
       get: jest.fn<(key: string) => Promise<IdempotencyRecord | null>>().mockResolvedValue(null),
     })
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext()
@@ -431,10 +437,10 @@ describe('intercepted response — module short-circuits', () => {
         { status: 'completed', response: { ok: true } }, // no statusCode
       ),
     })
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext()
@@ -454,10 +460,10 @@ describe('intercepted response — module short-circuits', () => {
       acquire: jest.fn<(key: string, ttl?: number) => Promise<boolean>>().mockResolvedValue(false),
       get: jest.fn<(key: string) => Promise<IdempotencyRecord | null>>().mockResolvedValue(cached),
     })
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store, duplicateStrategy: 'cache' },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext()
@@ -474,10 +480,10 @@ describe('intercepted response — module short-circuits', () => {
       acquire: jest.fn<(key: string, ttl?: number) => Promise<boolean>>().mockResolvedValue(false),
       get: jest.fn<(key: string) => Promise<IdempotencyRecord | null>>().mockResolvedValue(null),
     })
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext()
@@ -493,10 +499,10 @@ describe('intercepted response — module short-circuits', () => {
 describe('no idempotency key in headers', () => {
   it('calls next() and skips store interactions', async () => {
     const store = makeStore()
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq({ headers: {} })
     const res = makeRes()
     const next = makeNext(() => res.send({ ok: true }))
@@ -513,10 +519,10 @@ describe('no idempotency key in headers', () => {
 describe('idempotency config forwarding', () => {
   it('forwards custom ttl to store.set()', async () => {
     const store = makeStore()
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store, ttl: 7200 },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext(() => res.send({}))
@@ -528,10 +534,10 @@ describe('idempotency config forwarding', () => {
 
   it('forwards custom processingTtl to store.acquire()', async () => {
     const store = makeStore()
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store, processingTtl: 60 },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
     const next = makeNext(() => res.send({}))
@@ -543,10 +549,10 @@ describe('idempotency config forwarding', () => {
 
   it('forwards custom key header name to store', async () => {
     const store = makeStore()
-    const middleware = expressAdapter({
-      framework: Framework.EXPRESS,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store, key: 'X-Request-Id' },
     })
+    const middleware = expressAdapter(engine)
     const req = makeReq({ headers: { 'x-request-id': 'custom-key' } })
     const res = makeRes()
     const next = makeNext(() => res.send({}))

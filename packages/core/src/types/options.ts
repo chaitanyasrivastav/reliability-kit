@@ -1,4 +1,3 @@
-import { Framework } from './framework'
 import { IdempotencyStore } from '../modules/idempotency/stores/store'
 import { DuplicateStrategy, FailureMode } from '../modules/idempotency/idempotency'
 
@@ -36,18 +35,6 @@ import { DuplicateStrategy, FailureMode } from '../modules/idempotency/idempoten
  * ```
  */
 export interface ReliabilityOptions {
-  /**
-   * The web framework the middleware will be registered with.
-   *
-   * Determines which adapter is used to bridge the framework's req/res
-   * model to the engine's RequestContext. Must be provided explicitly —
-   * the library does not attempt to auto-detect the framework.
-   *
-   * Currently supported: Framework.EXPRESS
-   * Planned: Framework.FASTIFY, Framework.NODE
-   */
-  framework: Framework
-
   /**
    * Idempotency module configuration.
    *

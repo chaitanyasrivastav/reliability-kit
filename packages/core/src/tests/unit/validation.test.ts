@@ -4,7 +4,6 @@ import {
   ValidationError,
 } from '../../modules/idempotency/validation'
 import { ReliabilityOptions } from '../../types/options'
-import { Framework } from '../../types/framework'
 import { IdempotencyStore } from '../../modules/idempotency/stores/store'
 import { describe, it, expect } from '@jest/globals'
 
@@ -29,7 +28,6 @@ const mockStore: IdempotencyStore = {
  */
 function validOptions(overrides: Partial<ReliabilityOptions> = {}): ReliabilityOptions {
   return {
-    framework: Framework.EXPRESS,
     idempotency: {
       enabled: true,
       store: mockStore,
@@ -67,13 +65,12 @@ describe('validateOptions — valid configurations', () => {
   })
 
   it('does not throw when idempotency is not provided', () => {
-    expect(() => validateOptions({ framework: Framework.EXPRESS })).not.toThrow()
+    expect(() => validateOptions({})).not.toThrow()
   })
 
   it('does not throw when idempotency.enabled is false', () => {
     expect(() =>
       validateOptions({
-        framework: Framework.EXPRESS,
         idempotency: { enabled: false, store: mockStore },
       }),
     ).not.toThrow()
@@ -83,7 +80,6 @@ describe('validateOptions — valid configurations', () => {
     // store is not required when not enabled
     expect(() =>
       validateOptions({
-        framework: Framework.EXPRESS,
         idempotency: { enabled: false } as any,
       }),
     ).not.toThrow()
@@ -199,7 +195,6 @@ describe('IDEMPOTENCY_STORE_REQUIRED', () => {
   it('does not throw when enabled is false even if store is absent', () => {
     expect(() =>
       validateOptions({
-        framework: Framework.EXPRESS,
         idempotency: { enabled: false } as any,
       }),
     ).not.toThrow()

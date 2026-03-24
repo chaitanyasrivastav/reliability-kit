@@ -9,17 +9,19 @@ Prevents duplicate executions in distributed systems. Same request, same result,
 ## Install
 
 ```bash
-npm install reliability-kit
+npm install @reliability/express
+# or
+npm install @reliability/fastify
 ```
 
 Supports both CommonJS and ESM.
 
 ```typescript
 // ESM
-import { reliability, Framework } from 'reliability-kit'
+import { reliability } from '@reliability/express'
 
 // CommonJS
-const { reliability, Framework } = require('reliability-kit')
+const { reliability } = require('@reliability/express')
 ```
 
 ---
@@ -30,14 +32,13 @@ const { reliability, Framework } = require('reliability-kit')
 
 ```typescript
 import express from 'express'
-import { reliability, Framework, MemoryStore } from 'reliability-kit'
+import { reliability, MemoryStore } from '@reliability/express'
 
 const app = express()
 app.use(express.json())
 
 app.use(
   reliability({
-    framework: Framework.EXPRESS,
     idempotency: {
       enabled: true,
       store: new MemoryStore(), // use RedisStore in production
@@ -56,12 +57,11 @@ app.listen(3000)
 
 ```typescript
 import Fastify from 'fastify'
-import { reliability, Framework, MemoryStore } from 'reliability-kit'
+import { reliability, MemoryStore } from '@reliability/fastify'
 
 const fastify = Fastify()
 
 const protect = reliability({
-  framework: Framework.FASTIFY,
   idempotency: {
     enabled: true,
     store: new MemoryStore(), // use RedisStore in production
@@ -102,12 +102,11 @@ Use `RedisStore` in production — it works correctly across multiple instances 
 ### Express
 
 ```typescript
-import { reliability, Framework, RedisStore } from 'reliability-kit'
+import { reliability, RedisStore } from '@reliability/express'
 import Redis from 'ioredis'
 
 app.use(
   reliability({
-    framework: Framework.EXPRESS,
     idempotency: {
       enabled: true,
       store: new RedisStore(new Redis()),
@@ -124,11 +123,10 @@ app.use(
 ### Fastify
 
 ```typescript
-import { reliability, Framework, RedisStore } from 'reliability-kit'
+import { reliability, RedisStore } from '@reliability/fastify'
 import Redis from 'ioredis'
 
 const protect = reliability({
-  framework: Framework.FASTIFY,
   idempotency: {
     enabled: true,
     store: new RedisStore(new Redis()),
@@ -178,13 +176,13 @@ Prevents duplicate execution of request handlers. Built for payment flows, order
 
 ## Frameworks
 
-| Framework           | Status       | Pattern                                     |
-| ------------------- | ------------ | ------------------------------------------- |
-| `Framework.EXPRESS` | ✅ Supported | Global, per-router, or per-route middleware |
-| `Framework.FASTIFY` | ✅ Supported | Per-route wrapper function                  |
-| `Framework.HONO`    | 🚧 Planned   | —                                           |
-| `Framework.KOA`     | 🚧 Planned   | —                                           |
-| `Framework.NEXTJS`  | 🚧 Planned   | —                                           |
+| Framework           | Status           | Pattern                                     |
+| ------------------- | ---------------- | ------------------------------------------- |
+| `Framework.EXPRESS` | ✅ Supported     | Global, per-router, or per-route middleware |
+| `Framework.FASTIFY` | ✅ Supported     | Per-route wrapper function                  |
+| `Framework.HONO`    | 🚧 To Be Planned | —                                           |
+| `Framework.KOA`     | 🚧 To Be Planned | —                                           |
+| `Framework.NEXTJS`  | 🚧 To Be Planned | —                                           |
 
 ---
 
@@ -193,7 +191,8 @@ Prevents duplicate execution of request handlers. Built for payment flows, order
 Misconfiguration throws a `ReliabilityValidationError` at startup — not during a live request:
 
 ```typescript
-import { ReliabilityValidationError } from 'reliability-kit'
+import { ReliabilityValidationError } from '@reliability/core'
+import { reliability } from '@reliability/fastify'
 
 try {
   app.use(reliability(options))

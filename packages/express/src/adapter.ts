@@ -1,7 +1,4 @@
-import { ReliabilityEngine } from '../core/engine'
-import { RequestContext } from '../core/context'
-import { IdempotencyModule } from '../modules/idempotency/idempotency'
-import { ReliabilityOptions } from '../types/options'
+import type { ReliabilityEngine, RequestContext } from '@reliability/core'
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
 
 /**
@@ -27,22 +24,7 @@ import type { Request, Response, NextFunction, RequestHandler } from 'express'
  * Called internally by reliability() — not intended for direct use.
  * Users should call reliability({ framework: Framework.EXPRESS, ... }).
  */
-export function expressAdapter(options: ReliabilityOptions): RequestHandler {
-  // Construct modules once per middleware registration — not per request.
-  // Module instances are stateless with respect to individual requests
-  // (all state lives in the store or ctx), so sharing them across requests
-  // is safe and avoids unnecessary allocations on every request.
-  const modules = []
-
-  // Idempotency is opt-in — only constructed when explicitly enabled.
-  // Keeping it opt-in means the adapter adds zero overhead for apps
-  // that don't need idempotency.
-  if (options.idempotency?.enabled) {
-    modules.push(new IdempotencyModule(options.idempotency))
-  }
-
-  const engine = new ReliabilityEngine(modules)
-
+export function expressAdapter(engine: ReliabilityEngine): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     // ── Build the framework-agnostic context ───────────────────────────
     //

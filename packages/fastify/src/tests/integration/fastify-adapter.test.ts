@@ -1,8 +1,7 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
-import { fastifyAdapter } from '../../frameworks/fastify'
-import { Framework } from '../../types/framework'
-import { IdempotencyStore, IdempotencyRecord } from '../../modules/idempotency/stores/store'
+import { fastifyAdapter } from '../../adapter'
+import { createReliability, IdempotencyStore, IdempotencyRecord } from '@reliability/core'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -32,15 +31,14 @@ async function makeApp(
   configOverrides: any = {},
 ): Promise<FastifyInstance> {
   const app = Fastify()
-
-  const protect = fastifyAdapter({
-    framework: Framework.FASTIFY,
+  const { engine } = createReliability({
     idempotency: {
       enabled: true,
       store,
       ...configOverrides,
     },
   })
+  const protect = fastifyAdapter(engine)
 
   app.post('/orders', protect(routeHandler))
 
@@ -58,9 +56,10 @@ describe('module composition', () => {
   it('does not interact with store when idempotency is not configured', async () => {
     const store = makeStore()
     const app = Fastify()
+    const { engine } = createReliability({})
+    const protect = fastifyAdapter(engine)
 
     // No idempotency — plain wrapper with no modules
-    const protect = fastifyAdapter({ framework: Framework.FASTIFY })
     app.post('/orders', protect(noopHandler))
     await app.ready()
 
@@ -77,11 +76,10 @@ describe('module composition', () => {
   it('does not interact with store when enabled is false', async () => {
     const store = makeStore()
     const app = Fastify()
-
-    const protect = fastifyAdapter({
-      framework: Framework.FASTIFY,
+    const { engine } = createReliability({
       idempotency: { enabled: false, store },
     })
+    const protect = fastifyAdapter(engine)
     app.post('/orders', protect(noopHandler))
     await app.ready()
 
@@ -359,10 +357,10 @@ describe('context mapping from request', () => {
 
   it('reads idempotency key case-insensitively via custom header name', async () => {
     const store = makeStore()
-    const protect = fastifyAdapter({
-      framework: Framework.FASTIFY,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store, key: 'X-Request-Id' },
     })
+    const protect = fastifyAdapter(engine)
     const app = Fastify()
     app.post('/orders', protect(noopHandler))
     await app.ready()
@@ -423,10 +421,10 @@ describe('store failure modes', () => {
     app.setErrorHandler(async (err: Error, _req, reply) => {
       reply.status(500).send({ error: err.message })
     })
-    const protect = fastifyAdapter({
-      framework: Framework.FASTIFY,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store, onStoreFailure: 'strict' },
     })
+    const protect = fastifyAdapter(engine)
     app.post('/orders', protect(noopHandler))
     await app.ready()
 
@@ -448,10 +446,10 @@ describe('store failure modes', () => {
         .mockRejectedValue(new Error('Redis down')),
     })
     const app = Fastify()
-    const protect = fastifyAdapter({
-      framework: Framework.FASTIFY,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store, onStoreFailure: 'bypass' },
     })
+    const protect = fastifyAdapter(engine)
     app.post('/orders', protect(noopHandler))
     await app.ready()
 
@@ -472,10 +470,10 @@ describe('store failure modes', () => {
 describe('wrapper function — per-route control', () => {
   it('only protects wrapped routes — unwrapped routes bypass idempotency', async () => {
     const store = makeStore()
-    const protect = fastifyAdapter({
-      framework: Framework.FASTIFY,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const protect = fastifyAdapter(engine)
     const app = Fastify()
 
     // Protected route
@@ -497,10 +495,10 @@ describe('wrapper function — per-route control', () => {
 
   it('applies independently to each wrapped route', async () => {
     const store = makeStore()
-    const protect = fastifyAdapter({
-      framework: Framework.FASTIFY,
+    const { engine } = createReliability({
       idempotency: { enabled: true, store },
     })
+    const protect = fastifyAdapter(engine)
     const app = Fastify()
 
     app.post('/orders', protect(noopHandler))

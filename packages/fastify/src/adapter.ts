@@ -1,8 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
-import { ReliabilityEngine } from '../core/engine'
-import { RequestContext } from '../core/context'
-import { IdempotencyModule } from '../modules/idempotency/idempotency'
-import { ReliabilityOptions } from '../types/options'
+import type { ReliabilityEngine, RequestContext } from '@reliability/core'
 
 /**
  * Fastify route handler type — matches Fastify's expected handler signature.
@@ -34,20 +31,7 @@ type FastifyHandler = (request: FastifyRequest, reply: FastifyReply) => Promise<
  * fastify.get('/health',    healthHandler)  // ← not wrapped, no idempotency
  * ```
  */
-export function fastifyAdapter(options: ReliabilityOptions) {
-  // Construct modules once per adapter — not per request or per route.
-  // Module instances are stateless with respect to individual requests
-  // (all state lives in the store or ctx), so sharing them is safe and
-  // avoids per-request allocations.
-  const modules = []
-
-  // Idempotency is opt-in — only constructed when explicitly enabled.
-  if (options.idempotency?.enabled) {
-    modules.push(new IdempotencyModule(options.idempotency))
-  }
-
-  const engine = new ReliabilityEngine(modules)
-
+export function fastifyAdapter(engine: ReliabilityEngine) {
   /**
    * The wrapper function — decorates a Fastify route handler with
    * reliability behaviour. Returns a new handler with the same signature

@@ -1,3 +1,38 @@
+## 0.3.0 — 2026-03-24
+
+### Changed
+
+- Refactored project into a monorepo structure with separate packages:
+  - `@reliability/core` — framework-agnostic engine and modules
+  - `@reliability/express` — Express adapter
+  - `@reliability/fastify` — Fastify adapter
+- Decoupled core reliability engine from framework-specific implementations
+- Adapters now depend on `@reliability/core` instead of bundling all logic
+
+### Breaking Changes
+
+- Import paths have changed:
+  - Before:
+    ```ts
+    import { reliability } from 'reliability-kit'
+    ```
+  - After:
+    ```ts
+    import { reliability } from '@reliability/express'
+    ```
+- Core functionality is no longer available via a single package entrypoint
+
+### Improved
+
+- Reduced package size for framework-specific usage (install only what you need)
+- Better separation of concerns between engine and adapters
+- Foundation for adding future modules (circuit breaker, rate limiting, etc.) without bloating adapters
+
+### Notes
+
+- This release focuses on internal architecture changes and package distribution
+- Recommended for early adopters; API may still evolve before `1.0.0`
+
 ## 0.2.2 — 2026-03-23
 
 ### Fixed
