@@ -1,5 +1,5 @@
 {
-  "name": "@reliability/core",
+  "name": "@reliability-tools/core",
   "version": "0.3.1",
   "description": "API reliability toolkit (idempotency, rate limiting, retries)",
   "main": "dist/index.js",

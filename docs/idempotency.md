@@ -7,19 +7,19 @@ Ensures that duplicate requests with the same key are processed only once — pr
 ## Installation
 
 ```bash
-npm install @reliability/express
+npm install @reliability-tools/express
 # or
-npm install @reliability/fastify
+npm install @reliability-tools/fastify
 ```
 
 Supports both CommonJS (`require`) and ESM (`import`).
 
 ```typescript
 // ESM
-import { reliability } from '@reliability/express'
+import { reliability } from '@reliability-tools/express'
 
 // CommonJS
-const { reliability } = require('@reliability/express')
+const { reliability } = require('@reliability-tools/express')
 ```
 
 ---
@@ -94,7 +94,7 @@ Apply as middleware on the entire app — every route is automatically protected
 
 ```typescript
 import express from 'express'
-import { reliability, RedisStore } from '@reliability/express'
+import { reliability, RedisStore } from '@reliability-tools/express'
 import Redis from 'ioredis'
 
 const app = express()
@@ -124,7 +124,7 @@ Apply idempotency only to a specific router — useful when only some routes nee
 
 ```typescript
 import express from 'express'
-import { reliability, MemoryStore } from '@reliability/express'
+import { reliability, MemoryStore } from '@reliability-tools/express'
 
 const store = new RedisStore(new Redis())
 
@@ -171,7 +171,7 @@ The Fastify adapter returns a **wrapper function** instead of middleware. Apply 
 
 ```typescript
 import Fastify from 'fastify'
-import { reliability, RedisStore } from '@reliability/fastify'
+import { reliability, RedisStore } from '@reliability-tools/fastify'
 import Redis from 'ioredis'
 
 const fastify = Fastify()
@@ -320,7 +320,7 @@ Records written before fingerprinting was introduced (v0.1.x) have no stored fin
 In-process store backed by a `Map`. State is not shared across instances or server restarts.
 
 ```typescript
-import { MemoryStore } from '@reliability/express'
+import { MemoryStore } from '@reliability-tools/express'
 
 const store = new MemoryStore()
 ```
@@ -339,7 +339,7 @@ const store = new MemoryStore()
 Distributed store backed by Redis. Works correctly across multiple instances and server restarts (within Redis durability limits).
 
 ```typescript
-import { RedisStore } from '@reliability/express'
+import { RedisStore } from '@reliability-tools/express'
 import Redis from 'ioredis'
 
 const store = new RedisStore(new Redis())
@@ -373,7 +373,7 @@ Implement the `IdempotencyStore` interface to use any backend. The module routes
 Use this for any backend that supports a conditional write. The module uses the locked path — only one request executes the handler per key.
 
 ```typescript
-const { IdempotencyStore, IdempotencyRecord } = require('@reliability/core')
+const { IdempotencyStore, IdempotencyRecord } = require('@reliability-tools/core')
 
 class PostgresStore implements IdempotencyStore {
   /**
@@ -589,7 +589,7 @@ Retry-After: 30
 Invalid configuration throws a `ReliabilityValidationError` at startup with all problems listed at once — so you fix everything in one go rather than discovering errors one by one.
 
 ```typescript
-import { ReliabilityValidationError } from '@reliability/core'
+import { ReliabilityValidationError } from '@reliability-tools/core'
 
 try {
   app.use(reliability(options))

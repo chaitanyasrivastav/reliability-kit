@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { fastifyAdapter } from '../../adapter'
-import { createReliability, IdempotencyStore, IdempotencyRecord } from '@reliability/core'
+import { createReliability, IdempotencyStore, IdempotencyRecord } from '@reliability-tools/core'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

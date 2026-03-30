@@ -1,4 +1,4 @@
-import type { ReliabilityEngine, RequestContext } from '@reliability/core'
+import type { ReliabilityEngine, RequestContext } from '@reliability-tools/core'
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
 
 /**

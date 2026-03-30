@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
-import type { ReliabilityEngine, RequestContext } from '@reliability/core'
+import type { ReliabilityEngine, RequestContext } from '@reliability-tools/core'
 
 /**
  * Fastify route handler type — matches Fastify's expected handler signature.

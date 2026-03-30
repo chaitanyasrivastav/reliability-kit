@@ -9,19 +9,19 @@ Prevents duplicate executions in distributed systems. Same request, same result,
 ## Install
 
 ```bash
-npm install @reliability/express
+npm install @reliability-tools/express
 # or
-npm install @reliability/fastify
+npm install @reliability-tools/fastify
 ```
 
 Supports both CommonJS and ESM.
 
 ```typescript
 // ESM
-import { reliability } from '@reliability/express'
+import { reliability } from '@reliability-tools/express'
 
 // CommonJS
-const { reliability } = require('@reliability/express')
+const { reliability } = require('@reliability-tools/express')
 ```
 
 ---
@@ -32,7 +32,7 @@ const { reliability } = require('@reliability/express')
 
 ```typescript
 import express from 'express'
-import { reliability, MemoryStore } from '@reliability/express'
+import { reliability, MemoryStore } from '@reliability-tools/express'
 
 const app = express()
 app.use(express.json())
@@ -57,7 +57,7 @@ app.listen(3000)
 
 ```typescript
 import Fastify from 'fastify'
-import { reliability, MemoryStore } from '@reliability/fastify'
+import { reliability, MemoryStore } from '@reliability-tools/fastify'
 
 const fastify = Fastify()
 
@@ -102,7 +102,7 @@ Use `RedisStore` in production — it works correctly across multiple instances 
 ### Express
 
 ```typescript
-import { reliability, RedisStore } from '@reliability/express'
+import { reliability, RedisStore } from '@reliability-tools/express'
 import Redis from 'ioredis'
 
 app.use(
@@ -123,7 +123,7 @@ app.use(
 ### Fastify
 
 ```typescript
-import { reliability, RedisStore } from '@reliability/fastify'
+import { reliability, RedisStore } from '@reliability-tools/fastify'
 import Redis from 'ioredis'
 
 const protect = reliability({
@@ -191,8 +191,8 @@ Prevents duplicate execution of request handlers. Built for payment flows, order
 Misconfiguration throws a `ReliabilityValidationError` at startup — not during a live request:
 
 ```typescript
-import { ReliabilityValidationError } from '@reliability/core'
-import { reliability } from '@reliability/fastify'
+import { ReliabilityValidationError } from '@reliability-tools/core'
+import { reliability } from '@reliability-tools/fastify'
 
 try {
   app.use(reliability(options))

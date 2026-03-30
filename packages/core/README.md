@@ -1,6 +1,6 @@
-# @reliability/core
+# @reliability-tools/core
 
-Framework-agnostic reliability engine for Node.js. Provides the idempotency module and pluggable store interface used by `@reliability/express` and `@reliability/fastify`.
+Framework-agnostic reliability engine for Node.js. Provides the idempotency module and pluggable store interface used by `@reliability-tools/express` and `@reliability-tools/fastify`.
 
 You typically don't install this directly — install the adapter for your framework instead. Use this package if you're building a custom adapter or integrating with an unsupported framework.
 
@@ -11,17 +11,17 @@ Part of the [reliability-kit](https://github.com/chaitanyasrivastav/reliability-
 ## Install
 
 ```bash
-npm install @reliability/core
+npm install @reliability-tools/core
 ```
 
 ---
 
 ## Framework Adapters
 
-| Package | Framework |
-|---|---|
-| [`@reliability/express`](https://www.npmjs.com/package/@reliability/express) | Express 4 and 5 |
-| [`@reliability/fastify`](https://www.npmjs.com/package/@reliability/fastify) | Fastify 5 |
+| Package                                                                                  | Framework       |
+| ---------------------------------------------------------------------------------------- | --------------- |
+| [`@reliability-tools/express`](https://www.npmjs.com/package/@reliability-tools/express) | Express 4 and 5 |
+| [`@reliability-tools/fastify`](https://www.npmjs.com/package/@reliability-tools/fastify) | Fastify 5       |
 
 ---
 
@@ -30,8 +30,8 @@ npm install @reliability/core
 Implement `RequestContext`, run the engine, and map the result back to your framework's response:
 
 ```ts
-import { ReliabilityEngine, RequestContext } from '@reliability/core'
-import { IdempotencyModule, MemoryStore } from '@reliability/core'
+import { ReliabilityEngine, RequestContext } from '@reliability-tools/core'
+import { IdempotencyModule, MemoryStore } from '@reliability-tools/core'
 
 const engine = new ReliabilityEngine({
   idempotency: {
@@ -81,7 +81,7 @@ interface IdempotencyStore {
   get(key: string): Promise<IdempotencyRecord | null>
   set(key: string, value: IdempotencyRecord, ttlSeconds?: number): Promise<void>
   delete(key: string): Promise<void>
-  acquire?(key: string, ttl?: number): Promise<boolean>  // optional — enables atomic locking
+  acquire?(key: string, ttl?: number): Promise<boolean> // optional — enables atomic locking
   release?(key: string): Promise<void>
 }
 ```
@@ -91,7 +91,7 @@ Stores with `acquire()` get full concurrency safety via atomic locking. Stores w
 ### Built-in stores
 
 ```ts
-import { MemoryStore, RedisStore } from '@reliability/core'
+import { MemoryStore, RedisStore } from '@reliability-tools/core'
 
 // development and testing
 const store = new MemoryStore()
@@ -105,7 +105,7 @@ const store = new RedisStore(redisClient)
 ## Error Handling
 
 ```ts
-import { ReliabilityValidationError } from '@reliability/core'
+import { ReliabilityValidationError } from '@reliability-tools/core'
 
 try {
   const engine = new ReliabilityEngine(options)

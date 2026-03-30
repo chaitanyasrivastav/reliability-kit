@@ -1,4 +1,4 @@
-import { createReliability, ReliabilityOptions } from '@reliability/core'
+import { createReliability, ReliabilityOptions } from '@reliability-tools/core'
 import { fastifyAdapter } from './adapter'
 
 export function reliability(options: ReliabilityOptions) {

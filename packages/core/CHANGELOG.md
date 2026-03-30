@@ -1,4 +1,4 @@
-# @reliability/core
+# @reliability-tools/core
 
 # Changelog
 
@@ -18,7 +18,7 @@
 
 ### Added
 
-- Extracted from `reliability-kit` into standalone `@reliability/core` package
+- Extracted from `reliability-kit` into standalone `@reliability-tools/core` package
 - `ReliabilityEngine` — framework-agnostic core
 - `ReliabilityModule` interface — foundation for future modules (circuit breaker, rate limiting)
 - `RequestContext` interface — adapter contract

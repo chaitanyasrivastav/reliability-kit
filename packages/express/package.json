@@ -1,5 +1,5 @@
 {
-  "name": "@reliability/express",
+  "name": "@reliability-tools/express",
   "version": "0.3.1",
   "description": "API reliability toolkit (idempotency, rate limiting, retries)",
   "main": "dist/index.js",
@@ -57,7 +57,7 @@
     "express": "^4 || ^5"
   },
   "dependencies": {
-    "@reliability/core": "*"
+    "@reliability-tools/core": "*"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

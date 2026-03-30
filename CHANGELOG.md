@@ -3,11 +3,11 @@
 ### Changed
 
 - Refactored project into a monorepo structure with separate packages:
-  - `@reliability/core` — framework-agnostic engine and modules
-  - `@reliability/express` — Express adapter
-  - `@reliability/fastify` — Fastify adapter
+  - `@reliability-tools/core` — framework-agnostic engine and modules
+  - `@reliability-tools/express` — Express adapter
+  - `@reliability-tools/fastify` — Fastify adapter
 - Decoupled core reliability engine from framework-specific implementations
-- Adapters now depend on `@reliability/core` instead of bundling all logic
+- Adapters now depend on `@reliability-tools/core` instead of bundling all logic
 
 ### Breaking Changes
 
@@ -18,7 +18,7 @@
     ```
   - After:
     ```ts
-    import { reliability } from '@reliability/express'
+    import { reliability } from '@reliability-tools/express'
     ```
 - Core functionality is no longer available via a single package entrypoint
 

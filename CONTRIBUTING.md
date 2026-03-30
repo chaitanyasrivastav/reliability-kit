@@ -72,7 +72,7 @@ reliability-kit/
 │   │   │   └── integration/
 │   │   ├── tsconfig.json
 │   │   ├── tsup.config.ts
-│   │   └── package.json                    # name: @reliability/core
+│   │   └── package.json                    # name: @reliability-tools/core
 │   │
 │   ├── express/
 │   │   ├── src/
@@ -82,8 +82,8 @@ reliability-kit/
 │   │   │   └── express-adapter.test.ts
 │   │   ├── tsconfig.json
 │   │   ├── tsup.config.ts
-│   │   └── package.json                   # name: @reliability/express
-│   │                                        # depends on @reliability/core
+│   │   └── package.json                   # name: @reliability-tools/express
+│   │                                        # depends on @reliability-tools/core
 │   │
 │   ├── fastify/
 │   │   ├── src/
@@ -93,8 +93,8 @@ reliability-kit/
 │   │   │   └── fastify-adapter.test.ts
 │   │   ├── tsconfig.json
 │   │   ├── tsup.config.ts
-│   │   └── package.json                   # name: @reliability/fastify
-│   │                                        # depends on @reliability/core
+│   │   └── package.json                   # name: @reliability-tools/fastify
+│   │                                        # depends on @reliability-tools/core
 │
 ├── docs/
 │   └── idempotency.md

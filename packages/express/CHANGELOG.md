@@ -1,4 +1,4 @@
-# @reliability/express
+# @reliability-tools/express
 
 # Changelog
 
@@ -20,13 +20,13 @@
 
 ### Changed
 
-- Refactored into monorepo — core logic moved to `@reliability/core`
+- Refactored into monorepo — core logic moved to `@reliability-tools/core`
 - Import path changed:
   ```ts
   // before
   import { reliability } from 'reliability-kit'
   // after
-  import { reliability } from '@reliability/express' // or @reliability/fastify
+  import { reliability } from '@reliability-tools/express' // or @reliability-tools/fastify
   ```
 
 ## 0.2.2 — 2026-03-23
