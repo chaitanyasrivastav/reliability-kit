@@ -57,7 +57,7 @@
     "fastify": "^4 || ^5"
   },
   "dependencies": {
-    "@reliability-tools/core": "*"
+    "@reliability-tools/core": "^0.3.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
