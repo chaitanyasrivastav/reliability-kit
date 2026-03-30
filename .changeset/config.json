@@ -1,0 +1,7 @@
+{
+  "changelog": ["@changesets/changelog-github", { "repo": "chaitanyasrivastav/reliability-kit" }],
+  "commit": false,
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main"
+}
