@@ -1,12 +1,15 @@
 {
   "name": "@reliability/express",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "API reliability toolkit (idempotency, rate limiting, retries)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
   ],
+  "sideEffects": false,
   "scripts": {
     "dev": "ts-node src/index.ts",
     "typecheck": "tsc --noEmit",
@@ -50,9 +53,11 @@
     ]
   },
   "license": "ISC",
+  "peerDependencies": {
+    "express": "^4 || ^5"
+  },
   "dependencies": {
-    "@reliability/core": "*",
-    "express": "^5.0.0"
+    "@reliability/core": "*"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
@@ -62,7 +67,6 @@
     "@typescript-eslint/parser": "^8.57.0",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
-    "fastify": "^5.8.2",
     "globals": "^17.4.0",
     "jest": "^30.3.0",
     "jiti": "^2.6.1",
