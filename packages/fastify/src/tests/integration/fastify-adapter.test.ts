@@ -143,14 +143,14 @@ describe('happy path — handler runs normally', () => {
 
   it('calls acquire() with the correct idempotency key', async () => {
     await app.inject({ method: 'POST', url: '/orders', headers: { 'idempotency-key': 'my-key' } })
-    expect(store.acquire).toHaveBeenCalledWith('my-key', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:my-key', expect.any(Number))
   })
 
   it('stores completed response with correct shape after handler runs', async () => {
     await app.inject({ method: 'POST', url: '/orders', headers: { 'idempotency-key': 'key-abc' } })
 
     expect(store.set).toHaveBeenCalledWith(
-      'key-abc',
+      'POST:/orders:key-abc',
       expect.objectContaining({ status: 'completed', statusCode: 201 }),
       expect.any(Number),
     )
@@ -189,6 +189,35 @@ describe('no idempotency key in headers', () => {
   })
 })
 
+describe('module-written response headers', () => {
+  it('forwards responseHeaders and defaults status to 200 on short-circuit', async () => {
+    const engine = {
+      handle: jest.fn(async (ctx: any) => {
+        expect(ctx.statusCode).toBeUndefined()
+        ctx.responseHeaders = { 'X-RateLimit-Remaining': '9' }
+        ctx.response = { ok: true }
+      }),
+    } as any
+
+    const app = Fastify()
+    const protect = fastifyAdapter(engine)
+    app.post('/orders', protect(noopHandler))
+    await app.ready()
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: 'secret-token' },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['x-ratelimit-remaining']).toBe('9')
+    expect(res.headers.authorization).toBeUndefined()
+    expect(JSON.parse(res.body)).toEqual({ ok: true })
+    await app.close()
+  })
+})
+
 // ─── Duplicate requests ───────────────────────────────────────────────────────
 
 describe('duplicate requests', () => {
@@ -206,7 +235,10 @@ describe('duplicate requests', () => {
     })
 
     expect(res.statusCode).toBe(409)
-    expect(JSON.parse(res.body)).toMatchObject({ error: 'Request already in progress' })
+    expect(JSON.parse(res.body)).toMatchObject({
+      error: 'idempotency_key_in_use',
+      message: 'A request with this key is already in progress',
+    })
     await app.close()
   })
 
@@ -224,7 +256,11 @@ describe('duplicate requests', () => {
     })
 
     expect(res.headers['retry-after']).toBe('30')
-    expect(JSON.parse(res.body)).toMatchObject({ retryAfter: 30 })
+    expect(JSON.parse(res.body)).toMatchObject({
+      error: 'idempotency_key_in_use',
+      message: 'A request with this key is already in progress',
+      retryAfter: 30,
+    })
     await app.close()
   })
 
@@ -247,6 +283,7 @@ describe('duplicate requests', () => {
     })
 
     expect(res.statusCode).toBe(201)
+    expect(res.headers['idempotency-replayed']).toBe('true')
     await app.close()
   })
 
@@ -310,14 +347,14 @@ describe('response capture via reply.send() interception', () => {
     })
 
     expect(store.set).toHaveBeenCalledWith(
-      'capture-key',
+      'POST:/orders:capture-key',
       expect.objectContaining({ status: 'completed', statusCode: 201 }),
       expect.any(Number),
     )
     await app.close()
   })
 
-  it('captures correct statusCode from handler', async () => {
+  it('does not cache 4xx responses from the handler', async () => {
     const store = makeStore()
     const app = await makeApp(store, async (_req, reply) => {
       reply.status(422).send({ error: 'invalid' })
@@ -329,11 +366,7 @@ describe('response capture via reply.send() interception', () => {
       headers: { 'idempotency-key': 'status-key' },
     })
 
-    expect(store.set).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ statusCode: 422 }),
-      expect.any(Number),
-    )
+    expect(store.set).not.toHaveBeenCalled()
     await app.close()
   })
 })
@@ -351,7 +384,7 @@ describe('context mapping from request', () => {
       headers: { 'idempotency-key': 'exact-key' },
     })
 
-    expect(store.acquire).toHaveBeenCalledWith('exact-key', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:exact-key', expect.any(Number))
     await app.close()
   })
 
@@ -371,7 +404,7 @@ describe('context mapping from request', () => {
       headers: { 'x-request-id': 'custom-key' },
     })
 
-    expect(store.acquire).toHaveBeenCalledWith('custom-key', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:custom-key', expect.any(Number))
     await app.close()
   })
 })
@@ -509,8 +542,8 @@ describe('wrapper function — per-route control', () => {
     await app.inject({ method: 'POST', url: '/payments', headers: { 'idempotency-key': 'k2' } })
 
     expect(store.acquire).toHaveBeenCalledTimes(2)
-    expect(store.acquire).toHaveBeenCalledWith('k1', expect.any(Number))
-    expect(store.acquire).toHaveBeenCalledWith('k2', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:k1', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('POST:/payments:k2', expect.any(Number))
 
     await app.close()
   })

@@ -51,7 +51,6 @@ export function fastifyAdapter(engine: ReliabilityEngine) {
         path: request.url,
         headers: request.headers as Record<string, string | string[] | undefined>,
         body: request.body as unknown,
-        statusCode: 200,
       }
 
       // ── Engine execution ───────────────────────────────────────────────
@@ -94,11 +93,13 @@ export function fastifyAdapter(engine: ReliabilityEngine) {
       // If the handler ran normally, reply.sent is already true and this
       // block is skipped.
       if (ctx.response !== undefined && !reply.sent) {
-        // Set any headers written to ctx by modules (e.g. Retry-After from idempotency)
-        Object.entries(ctx.headers as Record<string, string>).forEach(([key, value]) => {
+        for (const [key, value] of Object.entries(ctx.responseHeaders ?? {}) as Array<
+          [string, string]
+        >) {
           reply.header(key, value)
-        })
-        await reply.status(ctx.statusCode as number).send(ctx.response)
+        }
+
+        await reply.status(ctx.statusCode ?? 200).send(ctx.response)
       }
     }
   }

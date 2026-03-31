@@ -63,6 +63,14 @@ export type DuplicateStrategy = 'cache' | 'reject'
  */
 export type FingerprintStrategy = 'method' | 'method+path' | 'full'
 
+const RFC_NON_IDEMPOTENT_METHODS = new Set(['POST', 'PUT', 'PATCH'])
+const MAX_IDEMPOTENCY_KEY_LENGTH = 255
+
+// Printable visible ASCII only. Space (0x20) is intentionally excluded
+// because whitespace-bearing keys are easy to mangle in clients, logs,
+// and proxy layers while adding little practical value.
+const IDEMPOTENCY_KEY_PATTERN = /^[\x21-\x7E]+$/
+
 /**
  * Configuration for the IdempotencyModule.
  * All fields except `store` are optional and have sensible defaults.
@@ -264,6 +272,14 @@ export class IdempotencyModule implements ReliabilityModule {
   }
 
   async execute(ctx: RequestContext, next: () => Promise<void>): Promise<void> {
+    const method = ctx.method.toUpperCase()
+
+    // RFC-style idempotency keys are only useful for non-idempotent methods.
+    // Skip naturally idempotent reads and metadata requests entirely.
+    if (!RFC_NON_IDEMPOTENT_METHODS.has(method)) {
+      return next()
+    }
+
     // Case-insensitive header lookup — HTTP headers are case-insensitive
     // by spec but frameworks differ in how they normalise them.
     const rawKey = ctx.headers
@@ -277,8 +293,19 @@ export class IdempotencyModule implements ReliabilityModule {
     // No idempotency key — pass through as a normal non-idempotent request.
     if (!idempotencyKey) return next()
 
+    if (!this.isValidIdempotencyKey(idempotencyKey)) {
+      ctx.statusCode = 422
+      ctx.response = {
+        error: 'invalid_idempotency_key',
+        message: 'Idempotency-Key must be 1-255 printable ASCII characters.',
+      }
+      return
+    }
+
+    const scopedKey = this.buildScopedKey(ctx, idempotencyKey)
+
     if (typeof this.store.acquire === 'function') {
-      return this.executeLocked(ctx, next, idempotencyKey)
+      return this.executeLocked(ctx, next, scopedKey)
     }
 
     // No acquire() — best-effort simple path. Bypass mode only.
@@ -286,7 +313,7 @@ export class IdempotencyModule implements ReliabilityModule {
       'Store does not implement acquire() — idempotency is best-effort only. ' +
         'Concurrent duplicate requests may both execute the handler.',
     )
-    return this.executeSimple(ctx, next, idempotencyKey)
+    return this.executeSimple(ctx, next, scopedKey)
   }
 
   // ── Fingerprinting ────────────────────────────────────────────────────
@@ -311,7 +338,8 @@ export class IdempotencyModule implements ReliabilityModule {
    */
   private normalizePath(path: string): string {
     const queryIndex = path.indexOf('?')
-    const cleanPath = (queryIndex === -1 ? path : path.slice(0, queryIndex)).replace(/\/$/, '')
+    const cleanPath =
+      (queryIndex === -1 ? path : path.slice(0, queryIndex)).replace(/\/$/, '') || '/'
 
     if (queryIndex === -1) return cleanPath
 
@@ -322,6 +350,30 @@ export class IdempotencyModule implements ReliabilityModule {
     ).toString()
 
     return `${cleanPath}?${sorted}`
+  }
+
+  private isValidIdempotencyKey(key: string): boolean {
+    return key.length <= MAX_IDEMPOTENCY_KEY_LENGTH && IDEMPOTENCY_KEY_PATTERN.test(key)
+  }
+
+  private buildScopedKey(ctx: RequestContext, key: string): string {
+    const method = ctx.method.toUpperCase()
+    const path = this.normalizePath(ctx.path || '/')
+    return `${method}:${path}:${key}`
+  }
+
+  private shouldPersistResponse(statusCode: number): boolean {
+    // Cache only successful completed operations. Non-2xx responses should
+    // generally be allowed to retry rather than replaying a cached failure.
+    return statusCode >= 200 && statusCode < 300
+  }
+
+  private async safelyReleaseKey(key: string, reason: string): Promise<void> {
+    try {
+      await this.store.release?.(key)
+    } catch (releaseErr) {
+      console.error(`Failed to release lock for key ${key} after ${reason}:`, releaseErr)
+    }
   }
 
   /**
@@ -342,13 +394,18 @@ export class IdempotencyModule implements ReliabilityModule {
         return method
 
       case 'method+path': {
-        const path = this.normalizePath(ctx.path)
+        const path = this.normalizePath(ctx.path || '/')
         return createHash('sha256').update(`${method}:${path}`).digest('hex')
       }
 
       case 'full': {
-        const path = this.normalizePath(ctx.path)
+        const path = this.normalizePath(ctx.path || '/')
+
+        // Canonicalize missing bodies and empty JSON objects to the same
+        // fingerprint. Different adapters expose an absent parsed body as
+        // either undefined or {}, and legitimate retries should still match.
         const body = JSON.stringify(ctx.body ?? {})
+
         return createHash('sha256').update(`${method}:${path}:${body}`).digest('hex')
       }
     }
@@ -396,16 +453,12 @@ export class IdempotencyModule implements ReliabilityModule {
     try {
       await next()
     } catch (err) {
-      try {
-        await this.store.release?.(key)
-      } catch (releaseErr) {
-        console.error(`Failed to release lock for key ${key}:`, releaseErr)
-      }
+      await this.safelyReleaseKey(key, 'handler failure')
       throw err
     }
 
     // ── Step 4: Persist the completed response ────────────────────────
-    await this.persistCompleted(ctx, key)
+    await this.persistCompleted(ctx, key, true)
   }
 
   // ── Simple path ───────────────────────────────────────────────────────
@@ -426,7 +479,10 @@ export class IdempotencyModule implements ReliabilityModule {
     }
 
     await next()
-    await this.persistCompleted(ctx, key)
+    // Simple path is only reachable in bypass mode — the constructor
+    // throws in strict mode when store.acquire is missing.
+    // persistCompleted errors are therefore always swallowed here.
+    await this.persistCompleted(ctx, key, false)
   }
 
   // ── Shared: handle duplicate in flight ────────────────────────────────
@@ -444,8 +500,15 @@ export class IdempotencyModule implements ReliabilityModule {
 
     // Still processing — return 409 with Retry-After
     ctx.statusCode = 409
-    ctx.headers = { ...ctx.headers, 'Retry-After': String(this.processingTtl) }
-    ctx.response = { error: 'Request already in progress', retryAfter: this.processingTtl }
+    ctx.responseHeaders = {
+      ...ctx.responseHeaders,
+      'Retry-After': String(this.processingTtl),
+    }
+    ctx.response = {
+      error: 'idempotency_key_in_use',
+      message: 'A request with this key is already in progress',
+      retryAfter: this.processingTtl,
+    }
   }
 
   // ── Shared: serve a cached completed response ─────────────────────────
@@ -469,17 +532,25 @@ export class IdempotencyModule implements ReliabilityModule {
     if (!this.validateFingerprint(ctx, record)) {
       ctx.statusCode = 422
       ctx.response = {
-        error: 'This idempotency key was used with a different request. Use a new key.',
+        error: 'idempotency_key_mismatch',
+        message: 'This idempotency key was used with a different request. Use a new key.',
       }
       return
     }
 
     if (this.duplicateStrategy === 'reject') {
       ctx.statusCode = 409
-      ctx.response = { error: 'Duplicate request' }
+      ctx.response = {
+        error: 'duplicate_request',
+        message: 'A request with this idempotency key has already been completed',
+      }
       return
     }
 
+    ctx.responseHeaders = {
+      ...ctx.responseHeaders,
+      'Idempotency-Replayed': 'true',
+    }
     ctx.response = record.response
     ctx.statusCode = record.statusCode ?? 200
   }
@@ -492,14 +563,28 @@ export class IdempotencyModule implements ReliabilityModule {
   // ⚠️  CRITICAL: never call release() or delete() if this fails.
   // The handler already ran — releasing the lock would allow a retry to
   // re-execute and produce a duplicate side effect.
-  private async persistCompleted(ctx: RequestContext, key: string): Promise<void> {
+  private async persistCompleted(
+    ctx: RequestContext,
+    key: string,
+    lockHeld: boolean,
+  ): Promise<void> {
+    const statusCode = ctx.statusCode ?? 200
+
+    if (!this.shouldPersistResponse(statusCode)) {
+      // Only the locked path has an in-flight processing lock to release.
+      if (lockHeld) {
+        await this.safelyReleaseKey(key, `non-cacheable ${statusCode} response`)
+      }
+      return
+    }
+
     try {
       await this.store.set(
         key,
         {
           status: 'completed',
           response: ctx.response,
-          statusCode: ctx.statusCode ?? 200,
+          statusCode,
           fingerprint: this.buildFingerprint(ctx),
         },
         this.ttl,

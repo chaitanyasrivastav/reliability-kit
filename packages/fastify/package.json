@@ -1,6 +1,6 @@
 {
   "name": "@reliability-tools/fastify",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "API reliability toolkit (idempotency, rate limiting, retries)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -57,7 +57,7 @@
     "fastify": "^4 || ^5"
   },
   "dependencies": {
-    "@reliability-tools/core": "^0.3.1"
+    "@reliability-tools/core": "^0.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

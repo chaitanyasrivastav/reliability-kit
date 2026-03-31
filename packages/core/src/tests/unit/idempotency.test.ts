@@ -1,4 +1,4 @@
-import { IdempotencyModule } from '../../modules/idempotency/idempotency'
+import { IdempotencyConfig, IdempotencyModule } from '../../modules/idempotency/idempotency'
 import { IdempotencyStore, IdempotencyRecord } from '../../modules/idempotency/stores/store'
 import { RequestContext } from '../../core/context'
 import { createHash } from 'crypto'
@@ -39,7 +39,10 @@ function makeStore(overrides: Partial<IdempotencyStore> = {}): jest.Mocked<Idemp
   } as jest.Mocked<IdempotencyStore>
 }
 
-function makeModule(storeOverrides: Partial<IdempotencyStore> = {}, configOverrides: any = {}) {
+function makeModule(
+  storeOverrides: Partial<IdempotencyStore> = {},
+  configOverrides: Partial<IdempotencyConfig> = {},
+) {
   const store = makeStore(storeOverrides)
   const module = new IdempotencyModule({ store, ...configOverrides })
   return { module, store }
@@ -115,7 +118,7 @@ describe('idempotency key extraction', () => {
         ctx.response = {}
       }),
     )
-    expect(store.acquire).toHaveBeenCalledWith('upper-key', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:upper-key', expect.any(Number))
   })
 
   it('takes first element when header is an array', async () => {
@@ -127,20 +130,54 @@ describe('idempotency key extraction', () => {
         ctx.response = {}
       }),
     )
-    expect(store.acquire).toHaveBeenCalledWith('key-one', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:key-one', expect.any(Number))
   })
 
-  it('passes exact key to all store calls', async () => {
+  it('scopes store keys by method and normalized path', async () => {
     const { module, store } = makeModule()
-    const ctx = makeCtx({ headers: { 'idempotency-key': 'exact-key' } })
+    const ctx = makeCtx({
+      path: '/orders/?b=2&a=1',
+      headers: { 'idempotency-key': 'exact-key' },
+    })
     await module.execute(
       ctx,
       makeNext(() => {
         ctx.response = {}
       }),
     )
-    expect(store.acquire).toHaveBeenCalledWith('exact-key', expect.any(Number))
-    expect(store.set).toHaveBeenCalledWith('exact-key', expect.any(Object), expect.any(Number))
+    const scopedKey = 'POST:/orders?a=1&b=2:exact-key'
+    expect(store.acquire).toHaveBeenCalledWith(scopedKey, expect.any(Number))
+    expect(store.set).toHaveBeenCalledWith(scopedKey, expect.any(Object), expect.any(Number))
+  })
+
+  it('rejects idempotency keys longer than 255 characters with 422', async () => {
+    const { module, store } = makeModule()
+    const ctx = makeCtx({ headers: { 'idempotency-key': 'k'.repeat(256) } })
+    const next = makeNext()
+
+    await module.execute(ctx, next)
+
+    expect(ctx.statusCode).toBe(422)
+    expect(ctx.response).toMatchObject({ error: 'invalid_idempotency_key' })
+    expect(next).not.toHaveBeenCalled()
+    expect(store.acquire).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the root path when ctx.path is empty', async () => {
+    const { module, store } = makeModule()
+    const ctx = makeCtx({
+      path: '',
+      headers: { 'idempotency-key': 'root-key' },
+    })
+
+    await module.execute(
+      ctx,
+      makeNext(() => {
+        ctx.response = {}
+      }),
+    )
+
+    expect(store.acquire).toHaveBeenCalledWith('POST:/:root-key', expect.any(Number))
   })
 })
 
@@ -207,7 +244,7 @@ describe('locked path — acquire() returns true (happy path)', () => {
       }),
     )
     expect(store.set).toHaveBeenCalledWith(
-      'test-key-123',
+      'POST:/orders:test-key-123',
       { status: 'completed', response: { id: 'order_1' }, statusCode: 201, fingerprint: 'POST' },
       expect.any(Number),
     )
@@ -264,6 +301,25 @@ describe('locked path — acquire() returns true (happy path)', () => {
 
 // ─── Locked path: acquire() returns false ────────────────────────────────────
 
+describe('method gating', () => {
+  it('skips idempotency for GET requests even when a key is present', async () => {
+    const { module, store } = makeModule()
+    const ctx = makeCtx({ method: 'GET' })
+    const next = makeNext(() => {
+      ctx.response = { ok: true }
+      ctx.statusCode = 200
+    })
+
+    await module.execute(ctx, next)
+
+    expect(next).toHaveBeenCalledTimes(1)
+    expect(store.acquire).not.toHaveBeenCalled()
+    expect(store.set).not.toHaveBeenCalled()
+  })
+})
+
+// ─── Locked path: acquire() returns false ────────────────────────────────────
+
 describe('locked path — acquire() returns false (duplicate)', () => {
   it('returns 409 with Retry-After when record is processing', async () => {
     const { module } = makeModule(
@@ -278,8 +334,12 @@ describe('locked path — acquire() returns false (duplicate)', () => {
     const ctx = makeCtx()
     await module.execute(ctx, noopHandler)
     expect(ctx.statusCode).toBe(409)
-    expect(ctx.response).toMatchObject({ error: 'Request already in progress', retryAfter: 30 })
-    expect(ctx.headers?.['Retry-After']).toBe('30')
+    expect(ctx.response).toMatchObject({
+      error: 'idempotency_key_in_use',
+      message: 'A request with this key is already in progress',
+      retryAfter: 30,
+    })
+    expect(ctx.responseHeaders?.['Retry-After']).toBe('30')
   })
 
   it('Retry-After header matches processingTtl', async () => {
@@ -294,8 +354,12 @@ describe('locked path — acquire() returns false (duplicate)', () => {
     )
     const ctx = makeCtx()
     await module.execute(ctx, noopHandler)
-    expect(ctx.headers?.['Retry-After']).toBe('90')
-    expect(ctx.response).toMatchObject({ retryAfter: 90 })
+    expect(ctx.responseHeaders?.['Retry-After']).toBe('90')
+    expect(ctx.response).toMatchObject({
+      error: 'idempotency_key_in_use',
+      message: 'A request with this key is already in progress',
+      retryAfter: 90,
+    })
   })
 
   it('returns cached response when completed and strategy is cache', async () => {
@@ -319,6 +383,7 @@ describe('locked path — acquire() returns false (duplicate)', () => {
     await module.execute(ctx, noopHandler)
     expect(ctx.response).toEqual({ id: 'order_1' })
     expect(ctx.statusCode).toBe(201)
+    expect(ctx.responseHeaders?.['Idempotency-Replayed']).toBe('true')
   })
 
   it('defaults statusCode to 200 when cached record has no statusCode', async () => {
@@ -375,6 +440,7 @@ describe('locked path — acquire() returns false (duplicate)', () => {
     const ctx = makeCtx()
     await module.execute(ctx, noopHandler)
     expect(ctx.response).not.toHaveProperty('secret')
+    expect(ctx.responseHeaders?.['Idempotency-Replayed']).toBeUndefined()
   })
 
   it('cache strategy does not set Retry-After header', async () => {
@@ -392,7 +458,7 @@ describe('locked path — acquire() returns false (duplicate)', () => {
     )
     const ctx = makeCtx()
     await module.execute(ctx, noopHandler)
-    expect(ctx.headers?.['Retry-After']).toBeUndefined()
+    expect(ctx.responseHeaders?.['Retry-After']).toBeUndefined()
   })
 
   it('never calls next() on any duplicate path', async () => {
@@ -429,7 +495,7 @@ describe('locked path — acquire() returns false (duplicate)', () => {
     })
     const ctx = makeCtx({ headers: { 'idempotency-key': 'my-key' } })
     await module.execute(ctx, noopHandler)
-    expect(store.get).toHaveBeenCalledWith('my-key')
+    expect(store.get).toHaveBeenCalledWith('POST:/orders:my-key')
     expect(store.get).toHaveBeenCalledTimes(1)
   })
 })
@@ -445,7 +511,7 @@ describe('locked path — handler throws', () => {
         jest.fn<() => Promise<void>>().mockRejectedValue(new Error('boom')),
       ),
     ).rejects.toThrow()
-    expect(store.release).toHaveBeenCalledWith('test-key-123')
+    expect(store.release).toHaveBeenCalledWith('POST:/orders:test-key-123')
   })
 
   it('calls release() exactly once', async () => {
@@ -588,6 +654,26 @@ describe('locked path — set() throws after next() succeeds', () => {
   })
 })
 
+// ─── Persistence policy ──────────────────────────────────────────────────────
+
+describe('persistence policy', () => {
+  it('releases the lock and does not cache 5xx responses', async () => {
+    const { module, store } = makeModule()
+    const ctx = makeCtx()
+
+    await module.execute(
+      ctx,
+      makeNext(() => {
+        ctx.statusCode = 500
+        ctx.response = { error: 'upstream_failure' }
+      }),
+    )
+
+    expect(store.set).not.toHaveBeenCalled()
+    expect(store.release).toHaveBeenCalledWith('POST:/orders:test-key-123')
+  })
+})
+
 // ─── Locked path: acquire() throws ───────────────────────────────────────────
 
 describe('locked path — acquire() throws', () => {
@@ -670,7 +756,10 @@ describe('locked path — get() throws when acquire() returns false', () => {
     const ctx = makeCtx()
     await module.execute(ctx, noopHandler)
     expect(ctx.statusCode).toBe(409)
-    expect(ctx.response).toMatchObject({ error: 'Request already in progress' })
+    expect(ctx.response).toMatchObject({
+      error: 'idempotency_key_in_use',
+      message: 'A request with this key is already in progress',
+    })
   })
 
   it('includes Retry-After header even when get() throws in bypass mode', async () => {
@@ -687,7 +776,7 @@ describe('locked path — get() throws when acquire() returns false', () => {
     )
     const ctx = makeCtx()
     await module.execute(ctx, noopHandler)
-    expect(ctx.headers?.['Retry-After']).toBe('30')
+    expect(ctx.responseHeaders?.['Retry-After']).toBe('30')
   })
 })
 
@@ -762,6 +851,7 @@ describe('simple path — store without acquire() (bypass mode only)', () => {
     await module.execute(ctx, next)
     expect(ctx.response).toEqual({ id: 'order_1' })
     expect(ctx.statusCode).toBe(201)
+    expect(ctx.responseHeaders?.['Idempotency-Replayed']).toBe('true')
     expect(next).not.toHaveBeenCalled()
   })
 
@@ -777,10 +867,28 @@ describe('simple path — store without acquire() (bypass mode only)', () => {
       }),
     )
     expect(store.set).toHaveBeenCalledWith(
-      'test-key-123',
+      'POST:/orders:test-key-123',
       { status: 'completed', response: { id: 'order_1' }, statusCode: 201, fingerprint: 'POST' },
       expect.any(Number),
     )
+  })
+
+  it('does not call release() for non-cacheable responses when no lock was acquired', async () => {
+    const store = makeStore()
+    delete (store as any).acquire
+    const module = new IdempotencyModule({ store, onStoreFailure: 'bypass' })
+    const ctx = makeCtx()
+
+    await module.execute(
+      ctx,
+      makeNext(() => {
+        ctx.statusCode = 422
+        ctx.response = { error: 'invalid_request' }
+      }),
+    )
+
+    expect(store.set).not.toHaveBeenCalled()
+    expect(store.release).not.toHaveBeenCalled()
   })
 
   it('bypasses to next() when get() throws', async () => {
@@ -1110,7 +1218,28 @@ describe('fingerprintStrategy: method+path — path and query string variations'
     expect(ctx.statusCode).toBe(201) // matched — not 422
   })
 
-  it('acquire() always receives raw idempotency key — not fingerprint', async () => {
+  it('falls back to the root path for method+path fingerprinting when ctx.path is empty', async () => {
+    const { module, store } = makeModule({}, { fingerprintStrategy: 'method+path' })
+    const ctx = makeCtx({
+      path: '',
+      headers: { 'idempotency-key': 'order-123' },
+    })
+    await module.execute(
+      ctx,
+      makeNext(() => {
+        ctx.response = {}
+      }),
+    )
+    expect(store.set).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        fingerprint: createHash('sha256').update('POST:/').digest('hex'),
+      }),
+      expect.any(Number),
+    )
+  })
+
+  it('acquire() scopes the key by method and normalized path — not by fingerprint hash', async () => {
     const { module, store } = makeModule({}, { fingerprintStrategy: 'method+path' })
     const ctx = makeCtx({
       path: '/orders/123?param=value',
@@ -1122,8 +1251,10 @@ describe('fingerprintStrategy: method+path — path and query string variations'
         ctx.response = {}
       }),
     )
-    // acquire() key is the idempotency key (raw) — fingerprint is stored separately in the record
-    expect(store.acquire).toHaveBeenCalledWith('order-123', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith(
+      'POST:/orders/123?param=value:order-123',
+      expect.any(Number),
+    )
   })
 })
 
@@ -1292,7 +1423,7 @@ describe('fingerprintStrategy: full — path, query string, and body variations'
       response: { id: 'order_1' },
       statusCode: 201,
       fingerprint: createHash('sha256')
-        .update(`POST:/orders?currency=USD:${JSON.stringify(body)}`)
+        .update(`POST:/orders?currency=USD:${JSON.stringify(body ?? {})}`)
         .digest('hex'),
     }
     const { module } = makeModule(
@@ -1315,14 +1446,14 @@ describe('fingerprintStrategy: full — path, query string, and body variations'
     expect(ctx.statusCode).toBe(422)
   })
 
-  it('empty path, empty body, no query string → 422', async () => {
+  it('root path with empty body and no query string → 201 cache hit', async () => {
     const body = undefined
     const record: IdempotencyRecord = {
       status: 'completed',
       response: { id: 'order_1' },
       statusCode: 201,
       fingerprint: createHash('sha256')
-        .update(`POST:/:${JSON.stringify(body)}`)
+        .update(`POST:/:${JSON.stringify(body ?? {})}`)
         .digest('hex'),
     }
     const { module } = makeModule(
@@ -1342,7 +1473,32 @@ describe('fingerprintStrategy: full — path, query string, and body variations'
       headers: { 'idempotency-key': 'order-123' },
     })
     await module.execute(ctx, noopHandler)
-    expect(ctx.statusCode).toBe(422)
+    expect(ctx.statusCode).toBe(201)
+  })
+
+  it('falls back to the root path in full fingerprinting when ctx.path is empty', async () => {
+    const body = undefined
+    const { module, store } = makeModule({}, { fingerprintStrategy: 'full' })
+    const ctx = makeCtx({
+      path: '',
+      body,
+      headers: { 'idempotency-key': 'order-123' },
+    })
+    await module.execute(
+      ctx,
+      makeNext(() => {
+        ctx.response = {}
+      }),
+    )
+    expect(store.set).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        fingerprint: createHash('sha256')
+          .update(`POST:/:${JSON.stringify(body ?? {})}`)
+          .digest('hex'),
+      }),
+      expect.any(Number),
+    )
   })
 
   it('normalizes query param order in full fingerprint', async () => {
@@ -1376,7 +1532,7 @@ describe('fingerprintStrategy: full — path, query string, and body variations'
     expect(ctx.statusCode).toBe(201) // matched — not 422
   })
 
-  it('acquire() always receives raw idempotency key — not fingerprint', async () => {
+  it('acquire() receives a scoped key that still includes the raw idempotency key', async () => {
     const { module, store } = makeModule({}, { fingerprintStrategy: 'full' })
     const ctx = makeCtx({
       path: '/orders/123?param=value',
@@ -1389,6 +1545,9 @@ describe('fingerprintStrategy: full — path, query string, and body variations'
         ctx.response = {}
       }),
     )
-    expect(store.acquire).toHaveBeenCalledWith('order-123', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith(
+      'POST:/orders/123?param=value:order-123',
+      expect.any(Number),
+    )
   })
 })

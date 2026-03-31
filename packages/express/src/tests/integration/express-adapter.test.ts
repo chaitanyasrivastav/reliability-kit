@@ -7,6 +7,7 @@ import { createReliability, IdempotencyStore, IdempotencyRecord } from '@reliabi
 function makeReq(overrides: Partial<any> = {}): any {
   return {
     method: 'POST',
+    url: '/orders',
     path: '/orders',
     headers: { 'idempotency-key': 'test-key-123' },
     body: { amount: 100 },
@@ -24,6 +25,11 @@ function makeRes(overrides: Partial<any> = {}): any {
 
   res.status = jest.fn((code: number) => {
     res.statusCode = code
+    return res
+  })
+
+  res.setHeader = jest.fn((name: string, value: string) => {
+    res._headers[name] = value
     return res
   })
 
@@ -160,7 +166,99 @@ describe('context mapping from req', () => {
 
     await middleware(req, res, next)
 
-    expect(store.acquire).toHaveBeenCalledWith('mapped-key', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:mapped-key', expect.any(Number))
+  })
+
+  it('prefers req.originalUrl when available', async () => {
+    const store = makeStore()
+    const { engine } = createReliability({
+      idempotency: { enabled: true, store },
+    })
+    const middleware = expressAdapter(engine)
+    const req = makeReq({
+      originalUrl: '/orders?source=original',
+      url: '/orders?source=url',
+      path: '/orders',
+      headers: { 'idempotency-key': 'original-key' },
+    })
+    const res = makeRes()
+    const next = makeNext(() => res.send({}))
+
+    await middleware(req, res, next)
+
+    expect(store.acquire).toHaveBeenCalledWith(
+      'POST:/orders?source=original:original-key',
+      expect.any(Number),
+    )
+  })
+
+  it('uses req.url when originalUrl is missing', async () => {
+    const store = makeStore()
+    const { engine } = createReliability({
+      idempotency: { enabled: true, store },
+    })
+    const middleware = expressAdapter(engine)
+    const req = makeReq({
+      originalUrl: undefined,
+      url: '/orders?source=url',
+      path: '/orders',
+      headers: { 'idempotency-key': 'url-key' },
+    })
+    const res = makeRes()
+    const next = makeNext(() => res.send({}))
+
+    await middleware(req, res, next)
+
+    expect(store.acquire).toHaveBeenCalledWith(
+      'POST:/orders?source=url:url-key',
+      expect.any(Number),
+    )
+  })
+
+  it('falls back to / when originalUrl and url are missing even if req.path exists', async () => {
+    const store = makeStore()
+    const { engine } = createReliability({
+      idempotency: { enabled: true, store },
+    })
+    const middleware = expressAdapter(engine)
+    const req = makeReq({
+      originalUrl: undefined,
+      url: undefined,
+      path: '/orders',
+    })
+    const res = makeRes()
+    const next = makeNext(() => res.send({}))
+
+    await middleware(req, res, next)
+
+    expect(store.acquire).toHaveBeenCalledWith('POST:/:test-key-123', expect.any(Number))
+  })
+
+  it('keeps response headers separate and defaults status to 200 on module short-circuit', async () => {
+    const engine = {
+      handle: jest.fn(async (ctx: any) => {
+        expect(ctx.statusCode).toBeUndefined()
+        ctx.responseHeaders = { 'X-RateLimit-Remaining': '9' }
+        ctx.response = { ok: true }
+      }),
+    } as any
+
+    const middleware = expressAdapter(engine)
+    const req = makeReq({
+      originalUrl: undefined,
+      url: undefined,
+      path: '/orders',
+      headers: { authorization: 'secret-token' },
+    })
+    const res = makeRes()
+    const next = makeNext()
+
+    await middleware(req, res, next)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res._headers['X-RateLimit-Remaining']).toBe('9')
+    expect(res._headers.authorization).toBeUndefined()
+    expect(res._body).toEqual({ ok: true })
   })
 
   it('passes req.body through to ctx', async () => {
@@ -242,7 +340,7 @@ describe('response interception via res.send()', () => {
     await middleware(req, res, next)
 
     expect(store.set).toHaveBeenCalledWith(
-      'test-key-123',
+      'POST:/orders:test-key-123',
       expect.objectContaining({ response: { id: 'order_1' }, statusCode: 201 }),
       expect.any(Number),
     )
@@ -403,7 +501,10 @@ describe('intercepted response — module short-circuits', () => {
 
     await middleware(req, res, next)
 
-    expect(res._body).toMatchObject({ error: 'Request already in progress' })
+    expect(res._body).toMatchObject({
+      error: 'idempotency_key_in_use',
+      message: 'A request with this key is already in progress',
+    })
     expect(res.headersSent).toBe(true)
   })
 
@@ -425,21 +526,13 @@ describe('intercepted response — module short-circuits', () => {
     expect(res.status).toHaveBeenCalledWith(409)
   })
 
-  it('defaults to status 200 when ctx.statusCode is undefined', async () => {
-    // Use a store that causes short-circuit but leaves statusCode undefined
-    // by triggering the no-key path (no idempotency-key header, module bypasses)
-    // We achieve this by not enabling idempotency and manually verifying the
-    // default status path via a custom module scenario.
-    // Simpler: just verify the res.status(200) fallback via the intercepted path.
-    const store = makeStore({
-      acquire: jest.fn<(key: string, ttl?: number) => Promise<boolean>>().mockResolvedValue(false),
-      get: jest.fn<(key: string) => Promise<IdempotencyRecord | null>>().mockResolvedValue(
-        { status: 'completed', response: { ok: true } }, // no statusCode
-      ),
-    })
-    const { engine } = createReliability({
-      idempotency: { enabled: true, store },
-    })
+  it('defaults to status 200 when ctx.statusCode is undefined and no response headers are set', async () => {
+    const engine = {
+      handle: jest.fn(async (ctx: any) => {
+        ctx.response = { ok: true }
+      }),
+    } as any
+
     const middleware = expressAdapter(engine)
     const req = makeReq()
     const res = makeRes()
@@ -448,6 +541,8 @@ describe('intercepted response — module short-circuits', () => {
     await middleware(req, res, next)
 
     expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.setHeader).not.toHaveBeenCalled()
+    expect(res._body).toEqual({ ok: true })
   })
 
   it('returns cached response on duplicate request', async () => {
@@ -471,6 +566,7 @@ describe('intercepted response — module short-circuits', () => {
     await middleware(req, res, next)
 
     expect(res.status).toHaveBeenCalledWith(201)
+    expect(res._headers['Idempotency-Replayed']).toBe('true')
     expect(res._body).toEqual({ id: 'order_1' })
     expect(next).not.toHaveBeenCalled()
   })
@@ -559,6 +655,6 @@ describe('idempotency config forwarding', () => {
 
     await middleware(req, res, next)
 
-    expect(store.acquire).toHaveBeenCalledWith('custom-key', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:custom-key', expect.any(Number))
   })
 })

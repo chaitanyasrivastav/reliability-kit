@@ -5,6 +5,7 @@ import {
 } from '../../modules/idempotency/validation'
 import { ReliabilityOptions } from '../../types/options'
 import { IdempotencyStore } from '../../modules/idempotency/stores/store'
+import { createReliability } from '../../middleware/reliability'
 import { describe, it, expect } from '@jest/globals'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -62,6 +63,19 @@ function expectValidationError(options: ReliabilityOptions): ReliabilityValidati
 describe('validateOptions — valid configurations', () => {
   it('does not throw for minimal valid options', () => {
     expect(() => validateOptions(validOptions())).not.toThrow()
+  })
+
+  it('createReliability validates options at startup', () => {
+    expect(() =>
+      createReliability({
+        idempotency: {
+          enabled: true,
+          store: mockStore,
+          ttl: 30,
+          processingTtl: 30,
+        },
+      }),
+    ).toThrow(ReliabilityValidationError)
   })
 
   it('does not throw when idempotency is not provided', () => {
