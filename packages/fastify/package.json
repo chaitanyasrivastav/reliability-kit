@@ -57,11 +57,10 @@
     "fastify": "^4 || ^5"
   },
   "dependencies": {
-    "@reliability-tools/core": "*"
+    "@reliability-tools/core": "^0.3.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-    "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
     "@typescript-eslint/eslint-plugin": "^8.57.0",
     "@typescript-eslint/parser": "^8.57.0",
