@@ -1,5 +1,18 @@
 # @reliability-tools/fastify
 
+## 0.4.0
+
+### Minor Changes
+
+- RFC-compliant idempotency — key scoping per endpoint, method filtering,
+  key validation, Idempotency-Replayed header, machine-readable error codes,
+  ctx.responseHeaders separation
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @reliability-tools/core@0.4.0
+
 # Changelog
 
 ## 0.3.1 — 2026-03-30

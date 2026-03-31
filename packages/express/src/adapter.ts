@@ -34,10 +34,9 @@ export function expressAdapter(engine: ReliabilityEngine): RequestHandler {
     // responsible for flushing those back to Express at the end.
     const ctx: RequestContext = {
       method: req.method,
-      path: req.url,
+      path: req.originalUrl ?? req.url ?? '/',
       headers: req.headers,
       body: req.body as unknown,
-      statusCode: 200,
     }
 
     // ── Response interception ──────────────────────────────────────────
@@ -118,7 +117,13 @@ export function expressAdapter(engine: ReliabilityEngine): RequestHandler {
     // Using res.json() rather than res.send() ensures the correct
     // Content-Type header is set for object responses (application/json).
     if (ctx.response !== undefined && !res.headersSent) {
-      res.status(ctx.statusCode as number).json(ctx.response)
+      for (const [key, value] of Object.entries(ctx.responseHeaders ?? {}) as Array<
+        [string, string]
+      >) {
+        res.setHeader(key, value)
+      }
+
+      res.status(ctx.statusCode ?? 200).json(ctx.response)
     }
   }
 }

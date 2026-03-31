@@ -13,10 +13,10 @@
  * additional data, it should be added here with a clear use case rather
  * than leaking framework types into the core.
  *
- * Mutability is intentional: modules write response and statusCode to
- * signal their outcome to the adapter. The last write wins — later
- * modules in the chain can overwrite earlier ones, though the engine's
- * ctx.response guard prevents most accidental overwrites.
+ * Mutability is intentional: modules write response, statusCode, and
+ * responseHeaders to signal their outcome to the adapter. The last write
+ * wins — later modules in the chain can overwrite earlier ones, though
+ * the engine's ctx.response guard prevents most accidental overwrites.
  */
 export interface RequestContext {
   /**
@@ -27,9 +27,11 @@ export interface RequestContext {
   method: string
 
   /**
-   * URL path of the incoming request, without query string.
-   * e.g. '/orders', '/payments/123'
-   * Used by logging and potentially by future rate-limiting modules.
+   * URL path of the incoming request.
+   * e.g. '/orders', '/payments/123', '/orders?expand=true'
+   *
+   * Adapters preserve the original URL when available so modules that
+   * fingerprint requests can include the query string when configured.
    */
   path: string
 
@@ -47,6 +49,16 @@ export interface RequestContext {
    * Modules that read headers must handle the undefined case gracefully.
    */
   headers?: Record<string, string | string[] | undefined>
+
+  /**
+   * Response headers that modules want the adapter to send.
+   *
+   * Kept separate from `headers` so request headers are never accidentally
+   * echoed back to the client. Modules should write here for values like
+   * `Retry-After`, `Idempotency-Replayed`, or future `X-RateLimit-*`
+   * headers.
+   */
+  responseHeaders?: Record<string, string>
 
   /**
    * Parsed request body.
@@ -94,16 +106,11 @@ export interface RequestContext {
 /**
  * Framework-agnostic representation of an outgoing HTTP response.
  *
- * Currently unused in the core engine — response state is written
- * directly to RequestContext (ctx.response, ctx.statusCode) rather
- * than to a separate ResponseContext. This interface is reserved for
- * future use when more granular response control is needed, such as
- * setting response headers from within a module (e.g. rate limiting
- * writing X-RateLimit-* headers, or CORS headers from a future module).
+ * Reserved for a future fuller response abstraction.
  *
- * When response header support is added to modules, this interface
- * will be the correct place to carry that state rather than mixing
- * response headers into RequestContext.headers.
+ * Today, response state is still written directly to `RequestContext`
+ * (`ctx.response`, `ctx.statusCode`, `ctx.responseHeaders`) because the
+ * engine only needs a minimal mutable envelope during a single request.
  */
 export interface ResponseContext {
   /**
