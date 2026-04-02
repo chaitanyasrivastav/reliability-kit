@@ -1,7 +1,7 @@
 {
   "name": "@reliability-tools/core",
   "version": "0.4.0",
-  "description": "API reliability toolkit (idempotency, rate limiting, retries)",
+  "description": "Framework-agnostic idempotency engine for Node.js with pluggable storage and atomic locking",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -10,6 +10,27 @@
     "CHANGELOG.md"
   ],
   "sideEffects": false,
+  "homepage": "https://github.com/chaitanyasrivastav/reliability-kit/blob/main/packages/core/README.md",
+  "keywords": [
+    "idempotency",
+    "nodejs",
+    "api reliability",
+    "distributed systems",
+    "concurrency",
+    "locking",
+    "atomic operations",
+    "retry safe",
+    "idempotency key",
+    "backend infrastructure"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chaitanyasrivastav/reliability-kit",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/chaitanyasrivastav/reliability-kit/issues"
+  },
   "scripts": {
     "dev": "ts-node src/index.ts",
     "typecheck": "tsc --noEmit",
@@ -52,7 +73,7 @@
       "src/types/framework.ts"
     ]
   },
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@types/express": "^5.0.6",

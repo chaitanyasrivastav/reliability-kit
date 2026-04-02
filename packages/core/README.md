@@ -2,6 +2,8 @@
 
 Framework-agnostic reliability engine for Node.js. Provides the idempotency module and pluggable store interface used by `@reliability-tools/express` and `@reliability-tools/fastify`.
 
+Full Documentation: https://github.com/chaitanyasrivastav/reliability-kit/tree/main/docs/idempotency.md
+
 You typically don't install this directly — install the adapter for your framework instead. Use this package if you're building a custom adapter or integrating with an unsupported framework.
 
 Part of the [reliability-kit](https://github.com/chaitanyasrivastav/reliability-kit) monorepo.
