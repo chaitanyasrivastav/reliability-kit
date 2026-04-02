@@ -6,6 +6,14 @@ Prevents duplicate executions in distributed systems. Same request, same result,
 
 ---
 
+## Packages
+
+| Package | Description | npm |
+|---|---|---|
+| [@reliability-tools/core](https://www.npmjs.com/package/@reliability-tools/core) | Idempotency engine, store interface, MemoryStore, RedisStore | [![npm](https://img.shields.io/npm/v/@reliability-tools/core)](https://www.npmjs.com/package/@reliability-tools/core) |
+| [@reliability-tools/express](https://www.npmjs.com/package/@reliability-tools/express) | Idempotency middleware for Express | [![npm](https://img.shields.io/npm/v/@reliability-tools/express)](https://www.npmjs.com/package/@reliability-tools/express) |
+| [@reliability-tools/fastify](https://www.npmjs.com/package/@reliability-tools/fastify) | Idempotency middleware for Fastify | [![npm](https://img.shields.io/npm/v/@reliability-tools/fastify)](https://www.npmjs.com/package/@reliability-tools/fastify) |
+
 ## Install
 
 ```bash
