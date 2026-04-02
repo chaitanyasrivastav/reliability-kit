@@ -1,5 +1,15 @@
 # @reliability-tools/core
 
+## 0.4.1
+
+### Patch Changes
+
+- Improve documentation and package metadata
+  - add full documentation link at top of README
+  - restructure README for better readability
+  - refine package descriptions to focus on idempotency
+  - add homepage, repository, bugs, and keywords to package.json
+
 ## 0.4.0
 
 ### Minor Changes
