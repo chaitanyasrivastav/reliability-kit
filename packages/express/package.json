@@ -1,7 +1,7 @@
 {
   "name": "@reliability-tools/express",
   "version": "0.4.0",
-  "description": "API reliability toolkit (idempotency, rate limiting, retries)",
+  "description": "Idempotency engine for Express with pluggable storage and atomic locking",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -10,6 +10,28 @@
     "CHANGELOG.md"
   ],
   "sideEffects": false,
+  "homepage": "https://github.com/chaitanyasrivastav/reliability-kit/blob/main/packages/express/README.md",
+  "keywords": [
+    "idempotency",
+    "express",
+    "express middleware",
+    "nodejs",
+    "api reliability",
+    "duplicate request",
+    "retry safe",
+    "idempotency key",
+    "distributed systems",
+    "concurrency control",
+    "redis"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chaitanyasrivastav/reliability-kit",
+    "directory": "packages/express"
+  },
+  "bugs": {
+    "url": "https://github.com/chaitanyasrivastav/reliability-kit/issues"
+  },
   "scripts": {
     "dev": "ts-node src/index.ts",
     "typecheck": "tsc --noEmit",
@@ -52,7 +74,7 @@
       "src/types/framework.ts"
     ]
   },
-  "license": "ISC",
+  "license": "MIT",
   "peerDependencies": {
     "express": "^4 || ^5"
   },

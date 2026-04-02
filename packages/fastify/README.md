@@ -2,6 +2,8 @@
 
 Idempotency wrapper for Fastify. Prevents duplicate execution of request handlers — built for payment flows, order creation, and any operation that must not run twice.
 
+Full Documentation: https://github.com/chaitanyasrivastav/reliability-kit/tree/main/docs/idempotency.md
+
 Per-route wrapper pattern — explicit opt-in per handler, no global middleware. Part of the [reliability-kit](https://github.com/chaitanyasrivastav/reliability-kit) monorepo.
 
 ---

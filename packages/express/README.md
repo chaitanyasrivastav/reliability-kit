@@ -2,6 +2,8 @@
 
 Idempotency middleware for Express. Prevents duplicate execution of request handlers — built for payment flows, order creation, and any operation that must not run twice.
 
+Full Documentation: https://github.com/chaitanyasrivastav/reliability-kit/tree/main/docs/idempotency.md
+
 Supports Express 4 and 5. Part of the [reliability-kit](https://github.com/chaitanyasrivastav/reliability-kit) monorepo.
 
 ---
