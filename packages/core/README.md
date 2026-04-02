@@ -20,10 +20,10 @@ npm install @reliability-tools/core
 
 ## Framework Adapters
 
-| Package | Framework |
-|---|---|
+| Package                                                                                  | Framework       |
+| ---------------------------------------------------------------------------------------- | --------------- |
 | [`@reliability-tools/express`](https://www.npmjs.com/package/@reliability-tools/express) | Express 4 and 5 |
-| [`@reliability-tools/fastify`](https://www.npmjs.com/package/@reliability-tools/fastify) | Fastify 5 |
+| [`@reliability-tools/fastify`](https://www.npmjs.com/package/@reliability-tools/fastify) | Fastify 5       |
 
 ---
 
@@ -93,7 +93,7 @@ interface IdempotencyStore {
   get(key: string): Promise<IdempotencyRecord | null>
   set(key: string, value: IdempotencyRecord, ttlSeconds?: number): Promise<void>
   delete(key: string): Promise<void>
-  acquire?(key: string, ttl?: number): Promise<boolean>  // optional — enables atomic locking
+  acquire?(key: string, ttl?: number): Promise<boolean> // optional — enables atomic locking
   release?(key: string): Promise<void>
 }
 ```
@@ -118,12 +118,12 @@ const store = new RedisStore(redisClient)
 
 All errors returned by the idempotency module use machine-readable codes:
 
-| Code | Status | Description |
-|---|---|---|
-| `invalid_idempotency_key` | 422 | Key exceeds 255 characters or contains invalid characters |
-| `idempotency_key_in_use` | 409 | A request with this key is already in progress |
-| `idempotency_key_mismatch` | 422 | Key was reused with a different request — use a new key |
-| `duplicate_request` | 409 | Request already completed and `duplicateStrategy: 'reject'` is set |
+| Code                       | Status | Description                                                        |
+| -------------------------- | ------ | ------------------------------------------------------------------ |
+| `invalid_idempotency_key`  | 422    | Key exceeds 255 characters or contains invalid characters          |
+| `idempotency_key_in_use`   | 409    | A request with this key is already in progress                     |
+| `idempotency_key_mismatch` | 422    | Key was reused with a different request — use a new key            |
+| `duplicate_request`        | 409    | Request already completed and `duplicateStrategy: 'reject'` is set |
 
 ---
 
@@ -157,7 +157,7 @@ interface RequestContext {
   body?: unknown
   statusCode?: number
   response?: unknown
-  responseHeaders?: Record<string, string>  // written by modules, forwarded by adapters
+  responseHeaders?: Record<string, string> // written by modules, forwarded by adapters
 }
 ```
 
