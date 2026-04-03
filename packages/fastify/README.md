@@ -163,15 +163,26 @@ interface IdempotencyStore {
 Misconfiguration throws `ReliabilityValidationError` at startup — not during a live request:
 
 ```ts
-import { ReliabilityValidationError } from '@reliability-tools/core'
-import { reliability } from '@reliability-tools/fastify'
+import { reliability, ReliabilityValidationError } from '@reliability-tools/fastify'
 
+let middleware
 try {
-  const protect = reliability(options)
+  middleware = reliability({
+    idempotency: {
+      enabled: true,
+      store,
+      ttl: 86400,
+      processingTtl: 30,
+      duplicateStrategy: 'cache',
+      onStoreFailure: 'strict',
+      fingerprintStrategy: 'full',
+    },
+  })
 } catch (err) {
   if (err instanceof ReliabilityValidationError) {
     err.errors.forEach((e) => console.error(`[${e.code}] ${e.message}`))
   }
+  process.exit(1)
 }
 ```
 
