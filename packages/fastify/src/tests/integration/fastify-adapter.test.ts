@@ -143,14 +143,14 @@ describe('happy path — handler runs normally', () => {
 
   it('calls acquire() with the correct idempotency key', async () => {
     await app.inject({ method: 'POST', url: '/orders', headers: { 'idempotency-key': 'my-key' } })
-    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:my-key', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('my-key', expect.any(Number))
   })
 
   it('stores completed response with correct shape after handler runs', async () => {
     await app.inject({ method: 'POST', url: '/orders', headers: { 'idempotency-key': 'key-abc' } })
 
     expect(store.set).toHaveBeenCalledWith(
-      'POST:/orders:key-abc',
+      'key-abc',
       expect.objectContaining({ status: 'completed', statusCode: 201 }),
       expect.any(Number),
     )
@@ -306,7 +306,7 @@ describe('duplicate requests', () => {
     })
 
     expect(res.statusCode).toBe(409)
-    expect(JSON.parse(res.body)).toMatchObject({ error: 'Duplicate request' })
+    expect(JSON.parse(res.body)).toMatchObject({ error: 'duplicate_request' })
     await app.close()
   })
 
@@ -347,7 +347,7 @@ describe('response capture via reply.send() interception', () => {
     })
 
     expect(store.set).toHaveBeenCalledWith(
-      'POST:/orders:capture-key',
+      'capture-key',
       expect.objectContaining({ status: 'completed', statusCode: 201 }),
       expect.any(Number),
     )
@@ -384,7 +384,7 @@ describe('context mapping from request', () => {
       headers: { 'idempotency-key': 'exact-key' },
     })
 
-    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:exact-key', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('exact-key', expect.any(Number))
     await app.close()
   })
 
@@ -404,7 +404,7 @@ describe('context mapping from request', () => {
       headers: { 'x-request-id': 'custom-key' },
     })
 
-    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:custom-key', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('custom-key', expect.any(Number))
     await app.close()
   })
 })
@@ -542,8 +542,8 @@ describe('wrapper function — per-route control', () => {
     await app.inject({ method: 'POST', url: '/payments', headers: { 'idempotency-key': 'k2' } })
 
     expect(store.acquire).toHaveBeenCalledTimes(2)
-    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:k1', expect.any(Number))
-    expect(store.acquire).toHaveBeenCalledWith('POST:/payments:k2', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('k1', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('k2', expect.any(Number))
 
     await app.close()
   })

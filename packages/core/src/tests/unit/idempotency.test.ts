@@ -118,7 +118,7 @@ describe('idempotency key extraction', () => {
         ctx.response = {}
       }),
     )
-    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:upper-key', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('upper-key', expect.any(Number))
   })
 
   it('takes first element when header is an array', async () => {
@@ -130,7 +130,7 @@ describe('idempotency key extraction', () => {
         ctx.response = {}
       }),
     )
-    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:key-one', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('key-one', expect.any(Number))
   })
 
   it('scopes store keys by method and normalized path', async () => {
@@ -145,7 +145,7 @@ describe('idempotency key extraction', () => {
         ctx.response = {}
       }),
     )
-    const scopedKey = 'POST:/orders?a=1&b=2:exact-key'
+    const scopedKey = 'exact-key'
     expect(store.acquire).toHaveBeenCalledWith(scopedKey, expect.any(Number))
     expect(store.set).toHaveBeenCalledWith(scopedKey, expect.any(Object), expect.any(Number))
   })
@@ -177,7 +177,7 @@ describe('idempotency key extraction', () => {
       }),
     )
 
-    expect(store.acquire).toHaveBeenCalledWith('POST:/:root-key', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('root-key', expect.any(Number))
   })
 })
 
@@ -244,7 +244,7 @@ describe('locked path — acquire() returns true (happy path)', () => {
       }),
     )
     expect(store.set).toHaveBeenCalledWith(
-      'POST:/orders:test-key-123',
+      'test-key-123',
       { status: 'completed', response: { id: 'order_1' }, statusCode: 201, fingerprint: 'POST' },
       expect.any(Number),
     )
@@ -417,7 +417,7 @@ describe('locked path — acquire() returns false (duplicate)', () => {
     const ctx = makeCtx()
     await module.execute(ctx, noopHandler)
     expect(ctx.statusCode).toBe(409)
-    expect(ctx.response).toMatchObject({ error: 'Duplicate request' })
+    expect(ctx.response).toMatchObject({ error: 'duplicate_request' })
   })
 
   it('reject strategy does not expose cached response body', async () => {
@@ -495,7 +495,7 @@ describe('locked path — acquire() returns false (duplicate)', () => {
     })
     const ctx = makeCtx({ headers: { 'idempotency-key': 'my-key' } })
     await module.execute(ctx, noopHandler)
-    expect(store.get).toHaveBeenCalledWith('POST:/orders:my-key')
+    expect(store.get).toHaveBeenCalledWith('my-key')
     expect(store.get).toHaveBeenCalledTimes(1)
   })
 })
@@ -511,7 +511,7 @@ describe('locked path — handler throws', () => {
         jest.fn<() => Promise<void>>().mockRejectedValue(new Error('boom')),
       ),
     ).rejects.toThrow()
-    expect(store.release).toHaveBeenCalledWith('POST:/orders:test-key-123')
+    expect(store.release).toHaveBeenCalledWith('test-key-123')
   })
 
   it('calls release() exactly once', async () => {
@@ -670,7 +670,7 @@ describe('persistence policy', () => {
     )
 
     expect(store.set).not.toHaveBeenCalled()
-    expect(store.release).toHaveBeenCalledWith('POST:/orders:test-key-123')
+    expect(store.release).toHaveBeenCalledWith('test-key-123')
   })
 })
 
@@ -867,7 +867,7 @@ describe('simple path — store without acquire() (bypass mode only)', () => {
       }),
     )
     expect(store.set).toHaveBeenCalledWith(
-      'POST:/orders:test-key-123',
+      'test-key-123',
       { status: 'completed', response: { id: 'order_1' }, statusCode: 201, fingerprint: 'POST' },
       expect.any(Number),
     )
@@ -920,7 +920,7 @@ describe('simple path — store without acquire() (bypass mode only)', () => {
     const ctx = makeCtx()
     await module.execute(ctx, noopHandler)
     expect(ctx.statusCode).toBe(409)
-    expect(ctx.response).toMatchObject({ error: 'Duplicate request' })
+    expect(ctx.response).toMatchObject({ error: 'duplicate_request' })
   })
 })
 
@@ -1252,7 +1252,7 @@ describe('fingerprintStrategy: method+path — path and query string variations'
       }),
     )
     expect(store.acquire).toHaveBeenCalledWith(
-      'POST:/orders/123?param=value:order-123',
+      'order-123',
       expect.any(Number),
     )
   })
@@ -1546,7 +1546,7 @@ describe('fingerprintStrategy: full — path, query string, and body variations'
       }),
     )
     expect(store.acquire).toHaveBeenCalledWith(
-      'POST:/orders/123?param=value:order-123',
+      'order-123',
       expect.any(Number),
     )
   })
