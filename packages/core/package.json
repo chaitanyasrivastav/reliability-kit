@@ -1,6 +1,6 @@
 {
   "name": "@reliability-tools/core",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Framework-agnostic idempotency engine for Node.js with pluggable storage and atomic locking",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
