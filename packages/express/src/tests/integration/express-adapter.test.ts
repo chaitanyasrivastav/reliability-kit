@@ -166,7 +166,7 @@ describe('context mapping from req', () => {
 
     await middleware(req, res, next)
 
-    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:mapped-key', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('mapped-key', expect.any(Number))
   })
 
   it('prefers req.originalUrl when available', async () => {
@@ -187,7 +187,7 @@ describe('context mapping from req', () => {
     await middleware(req, res, next)
 
     expect(store.acquire).toHaveBeenCalledWith(
-      'POST:/orders?source=original:original-key',
+      'original-key',
       expect.any(Number),
     )
   })
@@ -210,7 +210,7 @@ describe('context mapping from req', () => {
     await middleware(req, res, next)
 
     expect(store.acquire).toHaveBeenCalledWith(
-      'POST:/orders?source=url:url-key',
+      'url-key',
       expect.any(Number),
     )
   })
@@ -231,7 +231,7 @@ describe('context mapping from req', () => {
 
     await middleware(req, res, next)
 
-    expect(store.acquire).toHaveBeenCalledWith('POST:/:test-key-123', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('test-key-123', expect.any(Number))
   })
 
   it('keeps response headers separate and defaults status to 200 on module short-circuit', async () => {
@@ -340,7 +340,7 @@ describe('response interception via res.send()', () => {
     await middleware(req, res, next)
 
     expect(store.set).toHaveBeenCalledWith(
-      'POST:/orders:test-key-123',
+      'test-key-123',
       expect.objectContaining({ response: { id: 'order_1' }, statusCode: 201 }),
       expect.any(Number),
     )
@@ -655,6 +655,6 @@ describe('idempotency config forwarding', () => {
 
     await middleware(req, res, next)
 
-    expect(store.acquire).toHaveBeenCalledWith('POST:/orders:custom-key', expect.any(Number))
+    expect(store.acquire).toHaveBeenCalledWith('custom-key', expect.any(Number))
   })
 })
