@@ -1,5 +1,31 @@
 # @reliability-tools/core
 
+## 0.4.2
+
+### Patch Changes
+
+- 0.4.2 — 2026-04-04
+
+  Fixed
+  • Enforced fingerprint validation for idempotency keys
+  • Requests with the same key but different fingerprints now correctly return 422 Unprocessable Entity
+  • Fixes cases where different routes or query variations were incorrectly treated as the same request
+
+  Changed
+  • Updated fingerprinting behavior for method+path strategy
+  • Now consistently includes full request path (including query string) via req.originalUrl
+  • Aligned middleware behavior with HTTP semantics
+  • Idempotency handling is now skipped for safe methods like GET
+
+  Improved
+  • Re-exported MemoryStore, RedisStore, and ReliabilityValidationError from framework adapters (express, fastify)
+  • Simplifies imports and improves developer experience
+  • Corrected README examples to reflect proper import sources (@reliability-tools/core)
+
+  Notes
+  • This release improves correctness under concurrent and mismatched request scenarios
+  • No breaking API changes, but stricter validation may surface previously unnoticed issues in incorrect integrations
+
 ## 0.4.1
 
 ### Patch Changes

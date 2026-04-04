@@ -302,10 +302,8 @@ export class IdempotencyModule implements ReliabilityModule {
       return
     }
 
-    const scopedKey = this.buildScopedKey(ctx, idempotencyKey)
-
     if (typeof this.store.acquire === 'function') {
-      return this.executeLocked(ctx, next, scopedKey)
+      return this.executeLocked(ctx, next, idempotencyKey)
     }
 
     // No acquire() — best-effort simple path. Bypass mode only.
@@ -313,7 +311,7 @@ export class IdempotencyModule implements ReliabilityModule {
       'Store does not implement acquire() — idempotency is best-effort only. ' +
         'Concurrent duplicate requests may both execute the handler.',
     )
-    return this.executeSimple(ctx, next, scopedKey)
+    return this.executeSimple(ctx, next, idempotencyKey)
   }
 
   // ── Fingerprinting ────────────────────────────────────────────────────
@@ -354,12 +352,6 @@ export class IdempotencyModule implements ReliabilityModule {
 
   private isValidIdempotencyKey(key: string): boolean {
     return key.length <= MAX_IDEMPOTENCY_KEY_LENGTH && IDEMPOTENCY_KEY_PATTERN.test(key)
-  }
-
-  private buildScopedKey(ctx: RequestContext, key: string): string {
-    const method = ctx.method.toUpperCase()
-    const path = this.normalizePath(ctx.path || '/')
-    return `${method}:${path}:${key}`
   }
 
   private shouldPersistResponse(statusCode: number): boolean {
