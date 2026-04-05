@@ -31,13 +31,13 @@ jobs:
       - name: Lint
         run: npm run lint -- --max-warnings=0
 
-      # ── Tests + Coverage (100% enforced here) ──────────────────
-      - name: Test (with coverage)
-        run: npm run test:coverage
-
       # ── Build ──────────────────────────────────────────────────
       - name: Build packages
         run: npm run build:packages
+
+      # ── Tests + Coverage (100% enforced here) ──────────────────
+      - name: Test (with coverage)
+        run: npm run test:coverage
 
       # ── Pack (ensures npm package correctness) ─────────────────
       - name: Pack (smoke test for npm publish)
