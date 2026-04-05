@@ -39,11 +39,6 @@ jobs:
       - name: Test (with coverage)
         run: npm run test:coverage
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./coverage/lcov.info
-
       # ── Pack (ensures npm package correctness) ─────────────────
       - name: Pack (smoke test for npm publish)
         run: npm run pack
