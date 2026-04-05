@@ -1,4 +1,4 @@
-# reliability-kit
+# reliability-kit [![codecov](https://codecov.io/gh/chaitanyasrivastav/reliability-kit/branch/main/graph/badge.svg)](https://codecov.io/gh/chaitanyasrivastav/reliability-kit) ![CI](https://github.com/chaitanyasrivastav/reliability-kit/actions/workflows/ci.yml/badge.svg?branch=main)
 
 API reliability toolkit for Node.js — idempotency, and more coming soon.
 
