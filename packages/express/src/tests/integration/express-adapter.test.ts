@@ -186,10 +186,7 @@ describe('context mapping from req', () => {
 
     await middleware(req, res, next)
 
-    expect(store.acquire).toHaveBeenCalledWith(
-      'original-key',
-      expect.any(Number),
-    )
+    expect(store.acquire).toHaveBeenCalledWith('original-key', expect.any(Number))
   })
 
   it('uses req.url when originalUrl is missing', async () => {
@@ -209,10 +206,7 @@ describe('context mapping from req', () => {
 
     await middleware(req, res, next)
 
-    expect(store.acquire).toHaveBeenCalledWith(
-      'url-key',
-      expect.any(Number),
-    )
+    expect(store.acquire).toHaveBeenCalledWith('url-key', expect.any(Number))
   })
 
   it('falls back to / when originalUrl and url are missing even if req.path exists', async () => {

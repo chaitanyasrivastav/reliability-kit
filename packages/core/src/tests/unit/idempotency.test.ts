@@ -1251,10 +1251,7 @@ describe('fingerprintStrategy: method+path — path and query string variations'
         ctx.response = {}
       }),
     )
-    expect(store.acquire).toHaveBeenCalledWith(
-      'order-123',
-      expect.any(Number),
-    )
+    expect(store.acquire).toHaveBeenCalledWith('order-123', expect.any(Number))
   })
 })
 
@@ -1545,9 +1542,6 @@ describe('fingerprintStrategy: full — path, query string, and body variations'
         ctx.response = {}
       }),
     )
-    expect(store.acquire).toHaveBeenCalledWith(
-      'order-123',
-      expect.any(Number),
-    )
+    expect(store.acquire).toHaveBeenCalledWith('order-123', expect.any(Number))
   })
 })
